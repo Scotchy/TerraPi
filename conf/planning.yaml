@@ -1,0 +1,18 @@
+
+active: true
+
+periods:
+  day:
+    start: "07:00"
+    end: "17:00"
+    mode: day
+
+  night:
+    start: "22:00"
+    end: 07:00
+    mode: night
+  
+  off:
+    start: "17:00"
+    end: "22:00"
+    mode: off

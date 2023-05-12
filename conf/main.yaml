@@ -1,0 +1,28 @@
+
+
+mqtt: 
+  host: plantescarnivores.net
+  port: 1883
+  user: !env MQTT_USER
+  password: !env MQTT_PASSWORD
+
+log_interval: 60
+
+sensors:
+
+  dht22:
+    type: input
+    pin: 4
+
+  
+controls:
+  
+  cooling_system:
+    pin: 5
+
+  light:
+    pin: 14
+
+  
+planning: !include planning.yaml
+modes: !include modes.yaml
