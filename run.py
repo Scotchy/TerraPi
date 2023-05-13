@@ -13,28 +13,6 @@ current_mode = None
 devices_pins = {} 
 
 
-def handle_message(client, userdata, message):
-    # Topics possible: 
-    #  - planning/active 
-    #  - mode/set (works only if planning is not active)
-
-    global follow_planning
-    global current_mode
-
-    # Get the topic and the message
-    topic = message.topic
-    message = message.payload.decode("utf-8")
-
-    if topic == "planning/active":
-        follow_planning = message == "1"
-
-    elif topic == "mode/set":
-        if not follow_planning:
-            current_mode = message
-    else:
-        print(f"Unknown topic {topic}")
-
-
 @click.command()
 @click.option('--conf', help='Path to config file', required=True)
 def run(conf):
@@ -56,7 +34,7 @@ def run_robust(conf):
 
             # Connect to mosquitto broker
             client = tp.client.MosquittoClient(config.mqtt.host(), config.mqtt.port())
-            client.connect(config.mqtt.username(), config.mqtt.password())
+            client.connect(config.mqtt.user(), config.mqtt.password())
 
             # Create the terrarium
             terrarium = tp.terrarium.Terrarium(config)
