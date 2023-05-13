@@ -10,6 +10,6 @@ modes:
     light: False
     cooling_system: True
   
-  off:
+  "off":
     light: False
     cooling_system: False
