@@ -5,5 +5,5 @@ class Terrarium():
     def __init__(self, conf):
         self._conf = conf
 
-        self.sensors = to_dict(conf.sensors)
-        self.controls = to_dict(conf.controls)
+        self.sensors = { sensor_name: sensor() for sensor_name, sensor in conf.sensors.items() }
+        self.controls = { control_name: control() for control_name, control in conf.controls.items() }
