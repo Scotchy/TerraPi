@@ -84,7 +84,7 @@ class TerraHandler():
     def get_mode(self):
         # Set mode according to the planning if needed
         if self._follow_planning:
-            current_time = time.time()
+            current_time = time.localtime()
             for period in self._planning_periods.values():
                 # Str to hour and minute
                 start_hour, start_minute = period.start().split(":")
