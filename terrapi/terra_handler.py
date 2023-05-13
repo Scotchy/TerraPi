@@ -72,7 +72,7 @@ class TerraHandler():
             self._current_mode = self.get_mode()
 
             mode_params = self._conf.modes[self._current_mode]
-            target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.values()}
+            target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.keys()}
 
             for control_name, control in self._terrarium.controls.items():
                 # Set the control state
