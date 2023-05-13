@@ -43,35 +43,38 @@ def run(conf):
 
 def run_robust(conf):
 
-    try:
-        global follow_planning
-        global current_mode
-        global devices_pins
+    while True:
+        try:
+            global follow_planning
+            global current_mode
+            global devices_pins
 
-        # Load config file
-        config = xpipe.load_conf(conf)
+            # Load config file
+            config = xpipe.load_conf(conf)
 
-        # Connect to mosquitto broker
-        client = tp.client.MosquittoClient(config.mqtt.host(), config.mqtt.port())
-        client.connect(config.mqtt.username(), config.mqtt.password())
+            # Connect to mosquitto broker
+            client = tp.client.MosquittoClient(config.mqtt.host(), config.mqtt.port())
+            client.connect(config.mqtt.username(), config.mqtt.password())
 
-        # Create the terrarium
-        terrarium = tp.terrarium.Terrarium(config)
+            # Create the terrarium
+            terrarium = tp.terrarium.Terrarium(config)
 
-        # Create TerraHandler
-        terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config)
+            # Create TerraHandler
+            terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config)
 
-        # run 
-        terra_handler.run()
-    
-    except KeyboardInterrupt:
-        print("Exiting")
-        GPIO.cleanup()
-        client.disconnect()
-        exit(0)
+            # run 
+            terra_handler.run()
+        
+        except KeyboardInterrupt:
+            print("Exiting")
+            GPIO.cleanup()
+            client.disconnect()
+            exit(0)
 
-    except Exception as e:
-        print("Retrying in 10s")
-        GPIO.cleanup()
-        client.disconnect()
-        time.sleep(10)
+        except Exception as e:
+            print("Retrying in 10s")
+            GPIO.cleanup()
+            client.disconnect()
+            time.sleep(10)
+
+run()
