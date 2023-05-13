@@ -29,3 +29,6 @@ class MosquittoClient(Client):
 
     def subscribe(self, topic):
         self.client.subscribe(topic)
+
+    def publish(self, topic, message):
+        self.client.publish(topic, message)
