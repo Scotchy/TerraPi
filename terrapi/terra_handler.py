@@ -85,7 +85,7 @@ class TerraHandler():
         # Set mode according to the planning if needed
         if self._follow_planning:
             current_time = time.time()
-            for period in self._planning_periods:
+            for period in self._planning_periods.values():
                 if period.start() <= current_time <= period.end():
                     return period.mode()
             # If no period is active, return the default mode
