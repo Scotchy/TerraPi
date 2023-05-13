@@ -74,6 +74,7 @@ def run_robust(conf):
             exit(0)
 
         except Exception as e:
+            print(e)
             print("Retrying in 10s")
             GPIO.cleanup()
             if client is not None:
