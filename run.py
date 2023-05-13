@@ -1,5 +1,5 @@
 import terrapi as tp
-import xpipe
+from xpipe.config import load_config
 import click
 import time
 import board
@@ -43,6 +43,8 @@ def run(conf):
 
 def run_robust(conf):
 
+    client = None 
+
     while True:
         try:
             global follow_planning
@@ -50,7 +52,7 @@ def run_robust(conf):
             global devices_pins
 
             # Load config file
-            config = xpipe.load_conf(conf)
+            config = load_config(conf)
 
             # Connect to mosquitto broker
             client = tp.client.MosquittoClient(config.mqtt.host(), config.mqtt.port())
@@ -74,7 +76,8 @@ def run_robust(conf):
         except Exception as e:
             print("Retrying in 10s")
             GPIO.cleanup()
-            client.disconnect()
+            if client is not None:
+                client.disconnect()
             time.sleep(10)
 
 run()
