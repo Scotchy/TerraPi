@@ -12,18 +12,18 @@ sensors:
 
   dht22:
     !obj terrapi.sensor.DHT22:
-      pin: 4
+      pin: 17
 
   
 controls:
   
   cooling_system:
     !obj terrapi.control.Relay:
-      pin: 12
+      pin: 7
 
   light:
     !obj terrapi.control.Relay:
-      pin: 13
+      pin: 8
 
   
 planning: !include planning.yaml
