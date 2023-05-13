@@ -26,3 +26,6 @@ class MosquittoClient(Client):
         
     def disconnect(self):
         self.client.disconnect()
+
+    def subscribe(self, topic):
+        self.client.subscribe(topic)
