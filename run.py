@@ -52,7 +52,10 @@ def run_robust(conf):
             exit(0)
 
         except Exception as e:
-            print(e)
+            # Print whole stack trace
+            import traceback
+            traceback.print_exc()
+            
             print("Retrying in 10s")
             GPIO.cleanup()
             if client is not None:
