@@ -1,6 +1,8 @@
 
 active: true
 
+default_mode: off
+
 periods:
   day:
     start: "07:00"
