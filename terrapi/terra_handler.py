@@ -86,8 +86,17 @@ class TerraHandler():
         if self._follow_planning:
             current_time = time.time()
             for period in self._planning_periods.values():
-                if period.start() <= current_time <= period.end():
+                # Str to hour and minute
+                start_hour, start_minute = period.start().split(":")
+                end_hour, end_minute = period.end().split(":")
+                start_hour, start_minute = int(start_hour), int(start_minute)
+                end_hour, end_minute = int(end_hour), int(end_minute)
+
+                # Check if the current time is in the period
+                if start_hour <= current_time.hour <= end_hour and start_minute <= current_time.minute <= end_minute:
                     return period.mode()
+
+                
             # If no period is active, return the default mode
             return self._default_mode
             
