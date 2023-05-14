@@ -1,15 +1,13 @@
 
 
-modes:
+day:
+  light: True
+  cooling_system: False
 
-  day:
-    light: True
-    cooling_system: False
+night:
+  light: False
+  cooling_system: True
 
-  night:
-    light: False
-    cooling_system: True
-  
-  "off":
-    light: False
-    cooling_system: False
+"off":
+  light: False
+  cooling_system: False
