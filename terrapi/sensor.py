@@ -14,15 +14,15 @@ class DHT22(Sensor):
 
     def __init__(self, pin):
         super().__init__(pin)
-
-    def get_data(self):
         dht_pin = self._pin
         dht_pin = getattr(board, f"D{dht_pin}")
-        dht_device = adafruit_dht.DHT22(dht_pin)
+        self.dht_device = adafruit_dht.DHT22(dht_pin)
+
+    def get_data(self):
 
         try:
-            temperature = dht_device.temperature
-            humidity = dht_device.humidity
+            temperature = self.dht_device.temperature
+            humidity = self.dht_device.humidity
             return {
                 "temperature": temperature,
                 "humidity": humidity

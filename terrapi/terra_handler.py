@@ -10,7 +10,7 @@ from datetime import datetime
 class TerraHandler():
 
     def __init__(self, terra, mqtt_client, conf):
-        self._terra = terra
+        self._terrarium = terra
         self._mqtt_client = mqtt_client
         self._conf = conf
 
@@ -22,8 +22,6 @@ class TerraHandler():
         self._loop_interval = 1 # Loop interval in seconds
         self._log_interval = conf.log_interval() # Log interval in seconds
         self._last_log = 0 # Last time the data was logged
-
-        self._terrarium = Terrarium(conf)
 
 
     def _handle_message(self, client, userdata, message):
@@ -67,6 +65,7 @@ class TerraHandler():
                 for sensor_name, sensor_data in data.items():
                     for data_name, data_value in sensor_data.items():
                         self._mqtt_client.publish(f"sensor/{sensor_name}/{data_name}", str(data_value))
+                        print(f"sensor/{sensor_name}/{data_name}: {str(data_value)}")
 
             # Get the mode
             self._current_mode = self.get_mode()
@@ -80,6 +79,8 @@ class TerraHandler():
             
             # Sleep for 1 second
             time.sleep(1)
+
+            print(self._current_mode)
 
 
     def get_mode(self):
