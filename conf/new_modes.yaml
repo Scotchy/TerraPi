@@ -1,0 +1,29 @@
+
+
+day:
+  light: 
+    active: True
+  cooling_system: 
+    active: True
+    thermostat: 
+      sensors_names: ["dht22"]
+      max_temp: 25 # Don't turn on cooling system until temperature is 25 degrees or higher
+      release_delta: 2 # Don't turn off cooling system until temperature is 2 degrees above max_temp
+
+
+night:
+  light: 
+    active: False
+  cooling_system: 
+    active: True
+    thermostat: 
+      sensors_names: ["dht22"]
+      max_temp: 15 # Don't turn on cooling system until temperature is 15 degrees or higher
+      release_delta: 2 # Don't turn off cooling system until temperature is 2 degrees above max_temp
+      
+
+"off":
+  light: 
+    active: False
+  cooling_system: 
+    active: False

@@ -6,6 +6,7 @@ from terrapi.terrarium import Terrarium
 from xpipe.config import to_dict
 import time
 from datetime import datetime
+import json
 
 class TerraHandler():
 
@@ -33,14 +34,27 @@ class TerraHandler():
         topic = message.topic
         message = message.payload.decode("utf-8")
 
+        print(f"Received message on topic {topic}: {message}")
         if topic == "planning/active":
             self._follow_planning = message == "1"
 
         elif topic == "mode/set":
             if not self._follow_planning:
-                self._current_mode = message
+                self.set_mode(message)
+        elif topic == "get_conf":
+            print("Sending conf")
+            conf = {
+                "planning": {
+                    "active": self._follow_planning,
+                },
+                "modes": list(self._conf.modes),
+                "current_mode": self._current_mode
+            }
+            self._mqtt_client.publish("conf", json.dumps(conf))
+
         else:
             print(f"Unknown topic {topic}")
+        
 
 
     def run(self):
@@ -48,6 +62,7 @@ class TerraHandler():
         # Subscribe to topics
         self._mqtt_client.subscribe("planning/active")
         self._mqtt_client.subscribe("mode/set")
+        self._mqtt_client.subscribe("get_conf")
         
         self._mqtt_client.on_message(self._handle_message)
 
@@ -63,24 +78,38 @@ class TerraHandler():
             if time.time() - self._last_log >= self._log_interval:
                 self._last_log = time.time()
                 for sensor_name, sensor_data in data.items():
+
+                    if sensor_data is None:
+                        print(f"Error while reading data from sensor {sensor_name}")
+                        continue
+
                     for data_name, data_value in sensor_data.items():
                         self._mqtt_client.publish(f"sensor/{sensor_name}/{data_name}", str(data_value))
                         print(f"sensor/{sensor_name}/{data_name}: {str(data_value)}")
 
+                # Send the current mode
+                self._mqtt_client.publish("mode", self._current_mode)
+                print(f"mode: {self._current_mode}")
+
             # Get the mode
-            self._current_mode = self.get_mode()
+            tmp_mode = self.get_mode()
+            self.set_mode(tmp_mode)
 
             mode_params = self._conf.modes[self._current_mode]
-            target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.keys()}
+            target_controls_states = {control_name: mode_params[control_name]() for control_name in mode_params.keys()}
 
             for control_name, control in self._terrarium.controls.items():
                 # Set the control state
-                control.switch(target_controls_states.get(control_name, False))
-            
-            # Sleep for 1 second
-            time.sleep(1)
+                control.switch(target_controls_states.get(control_name, target_controls_states[control_name]))
 
-            print(self._current_mode)
+            # Receive messages
+            self._mqtt_client.loop(timeout=1)
+
+
+    def set_mode(self, mode):
+        if mode != self._current_mode:
+            print(f"Changing mode from {self._current_mode} to {mode}")
+            self._current_mode = mode
 
 
     def get_mode(self):
@@ -95,7 +124,13 @@ class TerraHandler():
                 end_hour, end_minute = int(end_hour), int(end_minute)
 
                 # Check if the current time is in the period
-                if start_hour <= current_time.hour <= end_hour and start_minute <= current_time.minute <= end_minute:
+                if start_hour <= current_time.hour <= end_hour:
+                    if start_hour == current_time.hour:
+                        if current_time.minute < start_minute:
+                            continue
+                    if end_hour == current_time.hour:
+                        if current_time.minute >= end_minute:
+                            continue
                     return period.mode()
 
                 

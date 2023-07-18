@@ -6,8 +6,6 @@ import board
 import adafruit_dht
 import RPi.GPIO as GPIO
 
-GPIO.setmode(GPIO.BCM)
-
 follow_planning = True 
 current_mode = None
 devices_pins = {} 
@@ -28,6 +26,12 @@ def run_robust(conf):
             global follow_planning
             global current_mode
             global devices_pins
+
+            follow_planning = True 
+            current_mode = None
+            devices_pins = {} 
+
+            GPIO.setmode(GPIO.BCM)
 
             # Load config file
             config = load_config(conf)
@@ -57,7 +61,9 @@ def run_robust(conf):
             traceback.print_exc()
             
             print("Retrying in 10s")
+
             GPIO.cleanup()
+
             if client is not None:
                 client.disconnect()
             time.sleep(10)

@@ -32,3 +32,6 @@ class MosquittoClient(Client):
 
     def publish(self, topic, message):
         self.client.publish(topic, message)
+    
+    def loop(self, timeout):
+        self.client.loop(timeout=timeout)
