@@ -153,10 +153,22 @@ class TerraHandler():
                         print(f"[SENSOR] sensor/{sensor_name}/{data_name}: {str(data_value)}")
 
                 # Send current mode
-                self._mqtt_client.publish("mode", self._current_mode)
+                self._mqtt_client.publish("mode", self._current_mode if self._current_mode else "None")
                 print(f"[MODE] mode: {self._current_mode}")
+            
+            # Handle 'None' mode - skip control application
+            if self._current_mode is None or self._current_mode == "None":
+                print(f"[CONTROL] Mode is None, skipping control application")
+                time.sleep(1)
+                continue
+            
             # Apply mode to controls
-            mode_params = self._conf.modes[self._current_mode]
+            mode_params = self._conf.modes.get(self._current_mode) if hasattr(self._conf.modes, 'get') else getattr(self._conf.modes, self._current_mode, None)
+            
+            if mode_params is None:
+                print(f"[CONTROL] Unknown mode '{self._current_mode}', skipping control application")
+                time.sleep(1)
+                continue
             
             # Debug: log mode being applied
             print(f"[CONTROL] Applying mode '{self._current_mode}'")
