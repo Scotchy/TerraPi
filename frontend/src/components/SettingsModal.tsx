@@ -112,6 +112,66 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
         }));
     };
 
+    handlePeriodNameChange = (oldName: string, newName: string) => {
+        if (newName === oldName) return;
+        if (newName.trim() === '') return;
+        
+        this.setState(prevState => {
+            const { [oldName]: periodData, ...restPeriods } = prevState.editedPlanning.periods;
+            return {
+                editedPlanning: {
+                    ...prevState.editedPlanning,
+                    periods: {
+                        ...restPeriods,
+                        [newName]: periodData
+                    }
+                },
+                hasChanges: true
+            };
+        });
+    };
+
+    handleAddPeriod = () => {
+        const modeNames = this.getModeNames();
+        const defaultMode = modeNames.length > 0 ? modeNames[0] : '';
+        
+        // Generate a unique period name
+        let newPeriodName = 'new_period';
+        let counter = 1;
+        while (this.state.editedPlanning.periods[newPeriodName]) {
+            newPeriodName = `new_period_${counter}`;
+            counter++;
+        }
+        
+        this.setState(prevState => ({
+            editedPlanning: {
+                ...prevState.editedPlanning,
+                periods: {
+                    ...prevState.editedPlanning.periods,
+                    [newPeriodName]: {
+                        start: '00:00',
+                        end: '00:00',
+                        mode: defaultMode
+                    }
+                }
+            },
+            hasChanges: true
+        }));
+    };
+
+    handleDeletePeriod = (periodName: string) => {
+        this.setState(prevState => {
+            const { [periodName]: _, ...restPeriods } = prevState.editedPlanning.periods;
+            return {
+                editedPlanning: {
+                    ...prevState.editedPlanning,
+                    periods: restPeriods
+                },
+                hasChanges: true
+            };
+        });
+    };
+
     handleSave = () => {
         if (this.state.activeTab === 'modes') {
             this.props.onSave('modes', this.state.editedModes);
@@ -213,20 +273,42 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                     </label>
                 </div>
 
-                <h4>Periods</h4>
+                <div className="section-header">
+                    <h4>Periods</h4>
+                    <button 
+                        className="btn btn-add" 
+                        onClick={this.handleAddPeriod}
+                        title="Add new period"
+                    >
+                        + Add Period
+                    </button>
+                </div>
                 <table className="settings-table">
                     <thead>
                         <tr>
-                            <th>Period</th>
+                            <th>Period Name</th>
                             <th>Start</th>
                             <th>End</th>
                             <th>Mode</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {Object.keys(periods).map(periodName => (
                             <tr key={periodName}>
-                                <td className="mode-name">{periodName}</td>
+                                <td>
+                                    <input
+                                        type="text"
+                                        className="period-name-input"
+                                        defaultValue={periodName}
+                                        onBlur={(e) => this.handlePeriodNameChange(periodName, e.target.value.trim())}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                (e.target as HTMLInputElement).blur();
+                                            }
+                                        }}
+                                    />
+                                </td>
                                 <td>
                                     <input
                                         type="time"
@@ -250,6 +332,15 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                                             <option key={mode} value={mode}>{mode}</option>
                                         ))}
                                     </select>
+                                </td>
+                                <td>
+                                    <button
+                                        className="btn-delete"
+                                        onClick={() => this.handleDeletePeriod(periodName)}
+                                        title="Delete period"
+                                    >
+                                        ×
+                                    </button>
                                 </td>
                             </tr>
                         ))}

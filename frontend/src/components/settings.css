@@ -221,6 +221,7 @@
 }
 
 .settings-table input[type="time"],
+.settings-table input[type="text"],
 .settings-table select {
     padding: 8px;
     border: 1px solid #ccc;
@@ -229,9 +230,66 @@
 }
 
 .settings-table input[type="time"]:focus,
+.settings-table input[type="text"]:focus,
 .settings-table select:focus {
     outline: none;
     border-color: #0066cc;
+}
+
+/* Period name input */
+.period-name-input {
+    width: 100%;
+    min-width: 80px;
+    max-width: 120px;
+    font-weight: 500;
+    color: #2c2b2b;
+}
+
+/* Section header with button */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 20px 0 10px 0;
+}
+
+.section-header h4 {
+    margin: 0;
+    font-size: 1em;
+    color: #555;
+}
+
+/* Add button */
+.btn-add {
+    padding: 6px 12px;
+    font-size: 13px;
+    background-color: #6aa66a;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-add:hover {
+    background-color: #5a9a5a;
+}
+
+/* Delete button */
+.btn-delete {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: #e74c3c;
+    cursor: pointer;
+    padding: 0 8px;
+    line-height: 1;
+    transition: color 0.2s, transform 0.2s;
+}
+
+.btn-delete:hover {
+    color: #c0392b;
+    transform: scale(1.1);
 }
 
 /* Settings Field */
