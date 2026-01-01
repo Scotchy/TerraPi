@@ -51,6 +51,7 @@ class TerraHandler():
 
         elif topic == "config/get":
             # Send full configuration to frontend
+            print("Received config/get request, publishing full config...")
             self._publish_full_config()
 
         elif topic == "config/update":
@@ -78,11 +79,18 @@ class TerraHandler():
 
     def _publish_full_config(self):
         """Publish the full configuration to the config/full topic."""
-        full_config = self._config_manager.get_full_config(self._conf)
-        # Add current runtime state
-        full_config["planning"]["active"] = self._follow_planning
-        full_config["current_mode"] = self._current_mode
-        self._mqtt_client.publish("config/full", json.dumps(full_config))
+        try:
+            full_config = self._config_manager.get_full_config(self._conf)
+            # Add current runtime state
+            full_config["planning"]["active"] = self._follow_planning
+            full_config["current_mode"] = self._current_mode
+            config_json = json.dumps(full_config)
+            print(f"Publishing config/full: {config_json[:200]}...")
+            self._mqtt_client.publish("config/full", config_json)
+        except Exception as e:
+            print(f"Error publishing full config: {e}")
+            import traceback
+            traceback.print_exc()
 
 
     def run(self):
