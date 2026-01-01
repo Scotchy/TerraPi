@@ -21,6 +21,7 @@ class TerraHandler():
         self._config_manager = ConfigManager(config_path)
 
         self._follow_planning = conf.planning.active  # Whether to follow the planning or not
+        print(f"Initial planning active: {self._follow_planning}")
         self._current_mode = None
         # Note: default_mode and planning_periods are read directly from self._conf for hot-reload support
 
