@@ -41,6 +41,8 @@ class TerraHandler():
         # Get the topic and the message
         topic = message.topic
         payload = message.payload.decode("utf-8")
+        
+        print(f"[MQTT] Received message on topic: {topic}")
 
         if topic == "planning/active":
             self._follow_planning = payload == "1"
@@ -95,13 +97,17 @@ class TerraHandler():
 
     def run(self):
 
+        # Set message handler BEFORE subscribing
+        self._mqtt_client.on_message(self._handle_message)
+
         # Subscribe to topics
         self._mqtt_client.subscribe("planning/active")
         self._mqtt_client.subscribe("mode/set")
         self._mqtt_client.subscribe("config/get")
         self._mqtt_client.subscribe("config/update")
         
-        self._mqtt_client.on_message(self._handle_message)
+        # Small delay to ensure subscriptions are active
+        time.sleep(0.5)
         
         # Publish initial config on startup
         self._publish_full_config()
