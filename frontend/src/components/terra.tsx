@@ -360,6 +360,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
                             <div className="dropdown">
                                 <label>Mode</label>
                                 <select value={this.state.current_mode} onChange={this.onModeChange} disabled={this.state.planning_active || this.state.planning_active === undefined || this.state.modes.length === 0}>
+                                    {this.state.current_mode === "None" && <option value="None" key="None">None</option>}
                                     {this.state.modes.map((mode) => <option value={mode} key={mode}>{mode}</option>)}
                                 </select>
                             </div>
