@@ -58,6 +58,7 @@ interface SettingsModalProps {
     config: FullConfig | null;
     onClose: () => void;
     onSave: (section: string, data: any) => void;
+    onDisconnect?: () => void;
 }
 
 interface SettingsModalState {
@@ -668,6 +669,15 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                     </div>
 
                     <div className="modal-footer">
+                        {this.props.onDisconnect && (
+                            <button className="btn btn-disconnect" onClick={this.props.onDisconnect}>
+                                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                                </svg>
+                                Disconnect
+                            </button>
+                        )}
+                        <div className="modal-footer-spacer"></div>
                         <button className="btn btn-secondary" onClick={this.handleClose}>
                             Cancel
                         </button>

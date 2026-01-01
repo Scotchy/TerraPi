@@ -1,0 +1,434 @@
+/* Login Modal Overlay */
+.login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Login Modal Container */
+.login-modal {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    width: 90%;
+    max-width: 400px;
+    padding: 40px 35px;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+    animation: slideUp 0.4s ease;
+    backdrop-filter: blur(10px);
+}
+
+@keyframes slideUp {
+    from { 
+        transform: translateY(30px); 
+        opacity: 0; 
+    }
+    to { 
+        transform: translateY(0); 
+        opacity: 1; 
+    }
+}
+
+/* Login Header */
+.login-header {
+    text-align: center;
+    margin-bottom: 35px;
+}
+
+.login-logo {
+    width: 70px;
+    height: 70px;
+    margin: 0 auto 15px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+
+.login-logo svg {
+    width: 40px;
+    height: 40px;
+    fill: white;
+}
+
+.login-header h1 {
+    margin: 0;
+    font-size: 28px;
+    color: #1a1a2e;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.login-header p {
+    margin: 8px 0 0;
+    color: #666;
+    font-size: 14px;
+}
+
+/* Login Form */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* Error Message */
+.login-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    background-color: #fee2e2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    color: #dc2626;
+    font-size: 14px;
+}
+
+.login-error svg {
+    width: 20px;
+    height: 20px;
+    fill: #dc2626;
+    flex-shrink: 0;
+}
+
+/* Input Groups */
+.input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-icon {
+    position: absolute;
+    left: 15px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.input-icon svg {
+    width: 20px;
+    height: 20px;
+    fill: #888;
+    transition: fill 0.2s;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 16px 50px 16px 50px;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    font-size: 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: #f9fafb;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    background-color: white;
+}
+
+.input-group input:focus + .input-icon svg,
+.input-group input:focus ~ .input-icon svg {
+    fill: #667eea;
+}
+
+.input-group input::placeholder {
+    color: #9ca3af;
+}
+
+/* Password Toggle */
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+
+.password-toggle:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.password-toggle svg {
+    width: 22px;
+    height: 22px;
+    fill: #888;
+}
+
+/* Login Button */
+.login-button {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+
+.login-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+
+.login-button:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.login-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Divider */
+.login-divider {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin: 5px 0;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background-color: #e5e7eb;
+}
+
+.login-divider span {
+    color: #9ca3af;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Biometric Button */
+.biometric-button {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+
+.biometric-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
+}
+
+.biometric-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.biometric-button svg {
+    width: 24px;
+    height: 24px;
+    fill: white;
+}
+
+/* Register Biometric Button */
+.register-biometric-button {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 2px dashed #10b981;
+    border-radius: 12px;
+    color: #10b981;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+
+.register-biometric-button:hover:not(:disabled) {
+    background-color: rgba(16, 185, 129, 0.1);
+}
+
+.register-biometric-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.register-biometric-button svg {
+    width: 20px;
+    height: 20px;
+    fill: #10b981;
+}
+
+/* Clear Biometric Button */
+.clear-biometric-button {
+    width: 100%;
+    padding: 10px;
+    background: none;
+    border: none;
+    color: #ef4444;
+    font-size: 13px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    text-decoration: underline;
+}
+
+.clear-biometric-button:hover {
+    opacity: 0.7;
+}
+
+/* Biometric Error */
+.biometric-error {
+    padding: 10px 15px;
+    background-color: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    color: #92400e;
+    font-size: 13px;
+    text-align: center;
+}
+
+/* Login Footer */
+.login-footer {
+    text-align: center;
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.login-footer p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .login-modal {
+        padding: 30px 25px;
+        margin: 15px;
+    }
+    
+    .login-header h1 {
+        font-size: 24px;
+    }
+    
+    .login-logo {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .login-logo svg {
+        width: 35px;
+        height: 35px;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .login-modal {
+        background: rgba(30, 30, 40, 0.95);
+    }
+    
+    .login-header h1 {
+        color: #f3f4f6;
+    }
+    
+    .login-header p {
+        color: #9ca3af;
+    }
+    
+    .input-group input {
+        background-color: #374151;
+        border-color: #4b5563;
+        color: #f3f4f6;
+    }
+    
+    .input-group input:focus {
+        background-color: #1f2937;
+        border-color: #667eea;
+    }
+    
+    .input-group input::placeholder {
+        color: #6b7280;
+    }
+    
+    .input-icon svg {
+        fill: #9ca3af;
+    }
+    
+    .password-toggle svg {
+        fill: #9ca3af;
+    }
+    
+    .login-divider::before,
+    .login-divider::after {
+        background-color: #4b5563;
+    }
+    
+    .login-footer {
+        border-top-color: #4b5563;
+    }
+    
+    .login-footer p {
+        color: #9ca3af;
+    }
+}

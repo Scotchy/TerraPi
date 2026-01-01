@@ -4,6 +4,7 @@ import React from 'react';
 import { Control } from './control';
 import { SettingsModal } from './SettingsModal';
 import { Toast } from './Toast';
+import { LoginModal } from './LoginModal';
 import './settings.css';
 
 interface TerraProps {
@@ -36,7 +37,11 @@ interface TerraState {
         visible: boolean,
         message: string,
         type: 'success' | 'error'
-    }
+    },
+    // Authentication state
+    showLogin: boolean,
+    isAuthenticated: boolean,
+    loginError: string
 }
 
 export class Terra extends React.Component<TerraProps, TerraState> {
@@ -58,36 +63,37 @@ export class Terra extends React.Component<TerraProps, TerraState> {
                 visible: false,
                 message: '',
                 type: 'success'
-            }
+            },
+            // Authentication state
+            showLogin: true,
+            isAuthenticated: false,
+            loginError: ''
         };
         this.client = null;
     }
 
-    connect(askCredentials : boolean = false) {
-
+    connect(username: string | null = null, password: string | null = null) {
         if (this.client !== null && this.client.isConnected()) {
             this.client.disconnect();
         }
 
-        const cookies = document.cookie.split(';');
-        let username : string | null = null;
-        let password : string | null = null;
-
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.startsWith("username=")) {
-            username = cookie.substring("username=".length, cookie.length);
-            } else if (cookie.startsWith("password=")) {
-            password = cookie.substring("password=".length, cookie.length);
+        // Try to get credentials from cookies if not provided
+        if (username === null || password === null) {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.startsWith("username=")) {
+                    username = cookie.substring("username=".length, cookie.length);
+                } else if (cookie.startsWith("password=")) {
+                    password = cookie.substring("password=".length, cookie.length);
+                }
             }
         }
 
-        // Prompt for username and password if not found in cookies
-        if (askCredentials || username === null || password === null) {
-            username = prompt("Username");
-            password = prompt("Password");
-            document.cookie = "username=" + username;
-            document.cookie = "password=" + password;
+        // If still no credentials, show login modal
+        if (username === null || password === null || username === '' || password === '') {
+            this.setState({ showLogin: true, isAuthenticated: false });
+            return;
         }
 
         // Generate unique client ID to avoid conflicts
@@ -105,8 +111,8 @@ export class Terra extends React.Component<TerraProps, TerraState> {
             userName: username,
             password: password,
             onSuccess: this.onConnect,
-            onFailure: this.onConnectionLost,
-            reconnect: true,
+            onFailure: this.onAuthFailure,
+            reconnect: false,
             keepAliveInterval: 30
         };
 
@@ -116,11 +122,35 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         this.client.onMessageArrived = this.onMessageArrived;
     }
 
+    handleLogin = (username: string, password: string) => {
+        // Store credentials in cookies
+        document.cookie = "username=" + username + "; path=/; max-age=31536000";
+        document.cookie = "password=" + password + "; path=/; max-age=31536000";
+        
+        this.setState({ loginError: '' });
+        this.connect(username, password);
+    }
+
+    onAuthFailure = (responseObject: any) => {
+        console.log("Authentication failed:", responseObject);
+        // Clear stored credentials on auth failure
+        document.cookie = "username=; path=/; max-age=0";
+        document.cookie = "password=; path=/; max-age=0";
+        
+        this.setState({ 
+            showLogin: true, 
+            isAuthenticated: false,
+            loginError: 'Invalid username or password'
+        });
+    }
+
     componentDidMount() {
+        // Try to connect with stored credentials
         this.connect();
     }
 
     onConnect = () => {
+        this.setState({ showLogin: false, isAuthenticated: true, loginError: '' });
         console.log("Connected to MQTT server");
 
         // Subscribe to sensor/dht22/temperature and sensor/dht22/humidity
@@ -236,6 +266,25 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         });
     }
 
+    onDisconnect = () => {
+        // Clear stored credentials
+        document.cookie = "username=; path=/; max-age=0";
+        document.cookie = "password=; path=/; max-age=0";
+        
+        // Disconnect MQTT client
+        if (this.client !== null && this.client.isConnected()) {
+            this.client.disconnect();
+        }
+        
+        // Show login modal
+        this.setState({ 
+            showLogin: true, 
+            isAuthenticated: false, 
+            loginError: '',
+            settingsVisible: false
+        });
+    }
+
     render() {
         return (
             <div id="terra" className="flex-container">
@@ -253,6 +302,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
                     config={this.state.fullConfig}
                     onClose={this.onSettingsClose}
                     onSave={this.onSettingsSave}
+                    onDisconnect={this.onDisconnect}
                 />
 
                 {/* Toast Notification */}
@@ -315,16 +365,14 @@ export class Terra extends React.Component<TerraProps, TerraState> {
                             </div>
                         </div>
                     </div>
-
-                    <div className="flex-row" id="change-login-row">
-                        <div className="change-login">
-                            <input type="button" value="Change login" onClick={() => {
-                                this.connect(true);
-                            }
-                            }/>
-                        </div>
-                    </div>
                 </div>
+
+                {/* Login Modal */}
+                <LoginModal
+                    visible={this.state.showLogin}
+                    onLogin={this.handleLogin}
+                    error={this.state.loginError}
+                />
             </div>
 
         );
