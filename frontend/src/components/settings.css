@@ -245,6 +245,15 @@
     color: #2c2b2b;
 }
 
+/* Mode name input */
+.mode-name-input {
+    width: 100%;
+    min-width: 80px;
+    max-width: 120px;
+    font-weight: 500;
+    color: #2c2b2b;
+}
+
 /* Section header with button */
 .section-header {
     display: flex;
@@ -287,9 +296,25 @@
     transition: color 0.2s, transform 0.2s;
 }
 
-.btn-delete:hover {
+.btn-delete:hover:not(:disabled) {
     color: #c0392b;
     transform: scale(1.1);
+}
+
+.btn-delete:disabled {
+    color: #ccc;
+    cursor: not-allowed;
+}
+
+/* None mode styling */
+.mode-none {
+    color: #888;
+    font-style: italic;
+}
+
+.mode-none-option {
+    color: #888;
+    font-style: italic;
 }
 
 /* Settings Field */
