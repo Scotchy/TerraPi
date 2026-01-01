@@ -36,15 +36,17 @@ def run_robust(conf):
             # Get the config directory from the config file path
             conf_dir = os.path.dirname(conf)
 
-            # Connect to mosquitto broker
-            client = tp.client.MosquittoClient(config.mqtt.host(), config.mqtt.port())
-            client.connect(config.mqtt.user(), config.mqtt.password())
-
             # Create the terrarium
             terrarium = tp.terrarium.Terrarium(config)
 
-            # Create TerraHandler
+            # Create MQTT client (don't connect yet)
+            client = tp.client.MosquittoClient(config.mqtt.host(), config.mqtt.port())
+
+            # Create TerraHandler (sets up message handler)
             terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config, conf_dir)
+
+            # Now connect (after message handler is set)
+            client.connect(config.mqtt.user(), config.mqtt.password())
 
             # run 
             terra_handler.run()

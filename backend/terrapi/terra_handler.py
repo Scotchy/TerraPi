@@ -30,6 +30,9 @@ class TerraHandler():
         self._log_interval = conf.log_interval() # Log interval in seconds
         self._last_log = 0 # Last time the data was logged
 
+        # Set message handler BEFORE connection (called from run.py after this)
+        self._mqtt_client.on_message(self._handle_message)
+
 
     def _handle_message(self, client, userdata, message):
         # Topics possible: 
@@ -97,10 +100,7 @@ class TerraHandler():
 
     def run(self):
 
-        # Set message handler BEFORE subscribing
-        self._mqtt_client.on_message(self._handle_message)
-
-        # Subscribe to topics
+        # Subscribe to topics (message handler already set in __init__)
         self._mqtt_client.subscribe("planning/active")
         self._mqtt_client.subscribe("mode/set")
         self._mqtt_client.subscribe("config/get")
