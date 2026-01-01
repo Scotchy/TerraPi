@@ -229,9 +229,7 @@ class ConfigManager:
                 # Hot-reload planning in terra_handler
                 if "active" in data:
                     terra_handler._follow_planning = data["active"]
-                if "default_mode" in data:
-                    terra_handler._default_mode = data["default_mode"]
-                # Also update config's internal data
+                # Update config's internal data (default_mode and periods are read from here)
                 conf._data['planning'] = data
             return success, message
         

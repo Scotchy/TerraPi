@@ -22,8 +22,7 @@ class TerraHandler():
 
         self._follow_planning = conf.planning.active  # Whether to follow the planning or not
         self._current_mode = None
-        self._default_mode = conf.planning.default_mode  # Default mode
-        self._planning_periods = conf.planning.periods  # Planning periods
+        # Note: default_mode and planning_periods are read directly from self._conf for hot-reload support
 
         self._loop_interval = 1  # Loop interval in seconds
         self._log_interval = conf.log_interval  # Log interval in seconds
@@ -62,9 +61,11 @@ class TerraHandler():
             # Handle configuration update request
             try:
                 update = json.loads(payload)
+                print(f"[CONFIG] Received update for section '{update.get('section')}': {update.get('data')}")
                 success, message = self._config_manager.apply_config_update(
                     update, self._conf, self
                 )
+                print(f"[CONFIG] Update result: success={success}, message={message}")
                 # Publish status response
                 status = {"success": success, "message": message, "section": update.get("section")}
                 self._mqtt_client.publish("config/status", json.dumps(status))
@@ -72,12 +73,17 @@ class TerraHandler():
                 # If successful, also publish updated full config
                 if success:
                     self._publish_full_config()
+                    # Log current config state for debugging
+                    print(f"[CONFIG] Updated modes in memory: {self._conf._data.get('modes')}")
+                    print(f"[CONFIG] Updated planning in memory: {self._conf._data.get('planning')}")
             except json.JSONDecodeError as e:
                 status = {"success": False, "message": f"Invalid JSON: {str(e)}"}
                 self._mqtt_client.publish("config/status", json.dumps(status))
             except Exception as e:
                 status = {"success": False, "message": f"Error: {str(e)}"}
                 self._mqtt_client.publish("config/status", json.dumps(status))
+                import traceback
+                traceback.print_exc()
         else:
             print(f"Unknown topic {topic}")
 
@@ -141,6 +147,10 @@ class TerraHandler():
 
             mode_params = self._conf.modes[self._current_mode]
             target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.keys()}
+            
+            # Debug: log mode and control states being applied
+            if time.time() - self._last_log < 2:  # Log with sensor data
+                print(f"[CONTROL] Applying mode '{self._current_mode}' with states: {target_controls_states}")
 
             for control_name, control in self._terrarium.controls.items():
                 # Set the control state
@@ -154,10 +164,13 @@ class TerraHandler():
         # Set mode according to the planning if needed
         if self._follow_planning:
             current_time = datetime.now()
-            for period in self._planning_periods.values():
+            # Read periods directly from config to get latest values
+            planning_periods = self._conf.planning.periods
+            for period_name in planning_periods.keys():
+                period = planning_periods[period_name]
                 # Str to hour and minute
-                start_hour, start_minute = period.start.split(":")
-                end_hour, end_minute = period.end.split(":")
+                start_hour, start_minute = str(period.start).split(":")
+                end_hour, end_minute = str(period.end).split(":")
                 start_hour, start_minute = int(start_hour), int(start_minute)
                 end_hour, end_minute = int(end_hour), int(end_minute)
 
@@ -166,8 +179,8 @@ class TerraHandler():
                     return period.mode
 
                 
-            # If no period is active, return the default mode
-            return self._default_mode
+            # If no period is active, return the default mode from config (for hot-reload support)
+            return self._conf.planning.default_mode
             
         else:
             # Remain unchanged
