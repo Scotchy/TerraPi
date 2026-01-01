@@ -142,6 +142,9 @@ class TerraHandler():
             if time.time() - self._last_log >= self._log_interval:
                 self._last_log = time.time()
                 for sensor_name, sensor_data in data.items():
+                    if sensor_data is None:
+                        print(f"[SENSOR] No data from sensor '{sensor_name}', skipping MQTT publish.")
+                        continue
                     for data_name, data_value in sensor_data.items():
                         self._mqtt_client.publish(f"sensor/{sensor_name}/{data_name}", str(data_value))
                         print(f"[SENSOR] sensor/{sensor_name}/{data_name}: {str(data_value)}")
