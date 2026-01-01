@@ -132,42 +132,70 @@ class TerraHandler():
             for sensor_name, sensor in self._terrarium.sensors.items():
                 data[sensor_name] = sensor.get_data()
             
-            # Get the mode FIRST (before publishing)
-            self._current_mode = self.get_mode()
+            # Check if we should log this iteration
+            should_log = time.time() - self._last_log >= self._log_interval
+            
+            # Get the mode FIRST (before publishing), with verbose logging on log intervals
+            self._current_mode = self.get_mode(verbose=should_log)
+            
+            # Validate mode exists in config
+            available_modes = list(self._conf.modes.keys())
+            if self._current_mode not in available_modes:
+                print(f"[ERROR] Mode '{self._current_mode}' not found in config! Available: {available_modes}")
+                self._current_mode = available_modes[0] if available_modes else None
+                
+            if self._current_mode is None:
+                print("[ERROR] No valid mode available, skipping control update")
+                time.sleep(1)
+                continue
 
-            # Send the data to mqtt
-            if time.time() - self._last_log >= self._log_interval:
+            # Get mode parameters and build target states
+            mode_config = self._conf.modes[self._current_mode]
+            
+            # Build target states - access each control value directly
+            target_controls_states = {}
+            for control_name in mode_config.keys():
+                control_value = mode_config[control_name]
+                target_controls_states[control_name] = control_value
+
+            # Send the data to mqtt (including debug info)
+            if should_log:
                 self._last_log = time.time()
                 for sensor_name, sensor_data in data.items():
-                    for data_name, data_value in sensor_data.items():
-                        self._mqtt_client.publish(f"sensor/{sensor_name}/{data_name}", str(data_value))
-                        print(f"sensor/{sensor_name}/{data_name}: {str(data_value)}")
+                    if sensor_data:  # Check sensor returned data
+                        for data_name, data_value in sensor_data.items():
+                            self._mqtt_client.publish(f"sensor/{sensor_name}/{data_name}", str(data_value))
+                            print(f"sensor/{sensor_name}/{data_name}: {str(data_value)}")
 
                 # Send current mode
                 self._mqtt_client.publish("mode", self._current_mode)
                 print(f"mode: {self._current_mode}")
+                
+                # Log control states being applied
+                print(f"[CONTROL] Mode '{self._current_mode}' -> states: {target_controls_states}")
 
             # Apply mode to controls
-            mode_params = self._conf.modes[self._current_mode]
-            target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.keys()}
-            
-            # Debug: log mode and control states being applied
-            print(f"[CONTROL] Applying mode '{self._current_mode}' with states: {target_controls_states}")
-
             for control_name, control in self._terrarium.controls.items():
-                # Set the control state
-                control.switch(target_controls_states.get(control_name, False))
+                target_state = target_controls_states.get(control_name, False)
+                control.switch(target_state)
+                if should_log:
+                    print(f"[CONTROL] {control_name} = {target_state}")
             
             # Sleep for 1 second
             time.sleep(1)
 
 
-    def get_mode(self):
+    def get_mode(self, verbose=False):
+        """
+        Determine the current mode based on planning or manual selection.
+        
+        Args:
+            verbose: If True, print debug information
+        """
         # Set mode according to the planning if needed
         if self._follow_planning:
             current_time = datetime.now()
             current_minutes = current_time.hour * 60 + current_time.minute  # Convert to minutes since midnight
-            print(f"[MODE] Following planning, current time: {current_time.strftime('%H:%M')} ({current_minutes} min)")
             
             # Read periods directly from config to get latest values
             planning_periods = self._conf.planning.periods
@@ -184,28 +212,29 @@ class TerraHandler():
                 
                 # Get the mode for this period
                 period_mode = period.mode
-                print(f"[MODE] Checking period '{period_name}': {start_hour:02d}:{start_minute:02d} - {end_hour:02d}:{end_minute:02d} -> mode '{period_mode}'")
 
                 # Check if the current time is in the period
                 # Handle overnight periods (e.g., 22:00 - 07:00)
+                matched = False
                 if start_minutes <= end_minutes:
                     # Normal period (same day): e.g., 07:00 - 17:00
-                    if start_minutes <= current_minutes < end_minutes:
-                        print(f"[MODE] Matched period '{period_name}', using mode '{period_mode}'")
-                        return period_mode
+                    matched = start_minutes <= current_minutes < end_minutes
                 else:
                     # Overnight period: e.g., 22:00 - 07:00
                     # Current time is in period if it's >= start OR < end
-                    if current_minutes >= start_minutes or current_minutes < end_minutes:
-                        print(f"[MODE] Matched overnight period '{period_name}', using mode '{period_mode}'")
-                        return period_mode
+                    matched = current_minutes >= start_minutes or current_minutes < end_minutes
+                
+                if matched:
+                    if verbose:
+                        print(f"[MODE] Time {current_time.strftime('%H:%M')} matched period '{period_name}' ({start_hour:02d}:{start_minute:02d}-{end_hour:02d}:{end_minute:02d}) -> mode '{period_mode}'")
+                    return period_mode
                 
             # If no period is active, return the default mode from config (for hot-reload support)
             default_mode = self._conf.planning.default_mode
-            print(f"[MODE] No period matched, using default mode '{default_mode}'")
+            if verbose:
+                print(f"[MODE] No period matched, using default mode '{default_mode}'")
             return default_mode
             
         else:
-            # Remain unchanged
-            print(f"[MODE] Planning inactive, keeping current mode '{self._current_mode}'")
+            # Planning inactive - keep current mode
             return self._current_mode
