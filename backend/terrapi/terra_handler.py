@@ -101,10 +101,12 @@ class TerraHandler():
     def run(self):
 
         # Subscribe to topics (message handler already set in __init__)
+        print("[MQTT] Subscribing to topics...")
         self._mqtt_client.subscribe("planning/active")
         self._mqtt_client.subscribe("mode/set")
         self._mqtt_client.subscribe("config/get")
         self._mqtt_client.subscribe("config/update")
+        print("[MQTT] Subscribed to: planning/active, mode/set, config/get, config/update")
         
         # Small delay to ensure subscriptions are active
         time.sleep(0.5)
@@ -112,6 +114,8 @@ class TerraHandler():
         # Publish initial config on startup
         self._publish_full_config()
 
+        print("[MQTT] Entering main loop, listening for messages...")
+        
         # Start the loop
         while True:
 

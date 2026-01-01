@@ -90,10 +90,13 @@ export class Terra extends React.Component<TerraProps, TerraState> {
             document.cookie = "password=" + password;
         }
 
+        // Generate unique client ID to avoid conflicts
+        const clientId = "front_" + Math.random().toString(16).substring(2, 10);
+        
         this.client = mqtt.connect(
             "plantescarnivores.net", 
             9001, 
-            "front", 
+            clientId, 
             this.onConnectionLost, 
             this.onMessageArrived
         );
@@ -103,7 +106,8 @@ export class Terra extends React.Component<TerraProps, TerraState> {
             password: password,
             onSuccess: this.onConnect,
             onFailure: this.onConnectionLost,
-            reconnect: true
+            reconnect: true,
+            keepAliveInterval: 30
         };
 
         this.client.connect(options);
