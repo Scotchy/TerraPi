@@ -21,7 +21,6 @@ class TerraHandler():
         self._config_manager = ConfigManager(config_path)
 
         self._follow_planning = conf.planning.active  # Whether to follow the planning or not
-        print(f"Initial planning active: {self._follow_planning}")
         self._current_mode = None
         # Note: default_mode and planning_periods are read directly from self._conf for hot-reload support
 
@@ -168,6 +167,7 @@ class TerraHandler():
         # Set mode according to the planning if needed
         if self._follow_planning:
             current_time = datetime.now()
+            print(f"[MODE] Following planning, current time: {current_time.strftime('%H:%M')}")
             # Read periods directly from config to get latest values
             planning_periods = self._conf.planning.periods
             for period_name in planning_periods.keys():
@@ -178,14 +178,18 @@ class TerraHandler():
                 start_hour, start_minute = int(start_hour), int(start_minute)
                 end_hour, end_minute = int(end_hour), int(end_minute)
 
+                print(f"[MODE] Checking period '{period_name}': {start_hour:02d}:{start_minute:02d} - {end_hour:02d}:{end_minute:02d} -> mode '{period.mode}'")
+
                 # Check if the current time is in the period
                 if start_hour <= current_time.hour <= end_hour and start_minute <= current_time.minute <= end_minute:
+                    print(f"[MODE] Matched period '{period_name}', using mode '{period.mode}'")
                     return period.mode
-
                 
             # If no period is active, return the default mode from config (for hot-reload support)
+            print(f"[MODE] No period matched, using default mode '{self._conf.planning.default_mode}'")
             return self._conf.planning.default_mode
             
         else:
             # Remain unchanged
+            print(f"[MODE] Planning inactive, keeping current mode '{self._current_mode}'")
             return self._current_mode
