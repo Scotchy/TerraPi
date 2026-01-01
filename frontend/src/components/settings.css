@@ -1,0 +1,351 @@
+/* Settings Button */
+.settings-button {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: #2c2b2b;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s, background-color 0.3s;
+    z-index: 100;
+}
+
+.settings-button:hover {
+    background-color: #444;
+    transform: rotate(45deg);
+}
+
+.settings-button svg {
+    width: 24px;
+    height: 24px;
+    fill: #fff;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Modal Content */
+.modal-content {
+    background-color: #fff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* Modal Header */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 25px;
+    border-bottom: 1px solid #e4e4e4;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.4em;
+    color: #2c2b2b;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #888;
+    padding: 0;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: #2c2b2b;
+}
+
+/* Modal Tabs */
+.modal-tabs {
+    display: flex;
+    border-bottom: 1px solid #e4e4e4;
+    padding: 0 25px;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 15px 25px;
+    font-size: 15px;
+    cursor: pointer;
+    color: #888;
+    border-bottom: 3px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+    margin-bottom: -1px;
+}
+
+.tab-button:hover {
+    color: #2c2b2b;
+}
+
+.tab-button.active {
+    color: #0066cc;
+    border-bottom-color: #0066cc;
+}
+
+/* Modal Body */
+.modal-body {
+    padding: 25px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Modal Footer */
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 25px;
+    border-top: 1px solid #e4e4e4;
+}
+
+/* Buttons */
+.btn {
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 15px;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s, opacity 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: #0066cc;
+    color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: #0052a3;
+}
+
+.btn-secondary {
+    background-color: #e4e4e4;
+    color: #2c2b2b;
+}
+
+.btn-secondary:hover {
+    background-color: #d0d0d0;
+}
+
+/* Settings Section */
+.settings-section h3 {
+    margin: 0 0 10px 0;
+    font-size: 1.1em;
+    color: #2c2b2b;
+}
+
+.settings-section h4 {
+    margin: 20px 0 10px 0;
+    font-size: 1em;
+    color: #555;
+}
+
+.settings-hint {
+    color: #888;
+    font-size: 13px;
+    margin: 0 0 20px 0;
+}
+
+/* Settings Table */
+.settings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.settings-table th,
+.settings-table td {
+    padding: 12px 10px;
+    text-align: center;
+    border-bottom: 1px solid #e4e4e4;
+}
+
+.settings-table th {
+    background-color: #f9f9f9;
+    font-weight: 600;
+    color: #555;
+    font-size: 13px;
+    text-transform: uppercase;
+}
+
+.settings-table td.mode-name {
+    font-weight: 500;
+    text-align: left;
+    color: #2c2b2b;
+}
+
+.settings-table input[type="time"],
+.settings-table select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.settings-table input[type="time"]:focus,
+.settings-table select:focus {
+    outline: none;
+    border-color: #0066cc;
+}
+
+/* Settings Field */
+.settings-field {
+    margin-bottom: 15px;
+}
+
+.settings-field > label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+}
+
+.settings-field > label > span {
+    font-weight: 500;
+    color: #2c2b2b;
+}
+
+.settings-field select {
+    padding: 10px 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    min-width: 150px;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 26px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 26px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #6aa66a;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(22px);
+}
+
+/* Toast Notifications */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 15px 25px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    z-index: 2000;
+    animation: toastSlideUp 0.3s ease;
+}
+
+@keyframes toastSlideUp {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.toast-success {
+    background-color: #6aa66a;
+    color: #fff;
+}
+
+.toast-error {
+    background-color: #e74c3c;
+    color: #fff;
+}
+
+.toast-message {
+    font-size: 15px;
+}
+
+.toast-close {
+    font-size: 20px;
+    opacity: 0.8;
+}
+
+.toast-close:hover {
+    opacity: 1;
+}

@@ -3,17 +3,23 @@ import adafruit_dht
 import RPi.GPIO as GPIO
 import terrapi.sensor as sensor
 from terrapi.terrarium import Terrarium
+from terrapi.config_manager import ConfigManager
 from xpipe.config import to_dict
 import time
-from datetime import datetime
 import json
+import os
+from datetime import datetime
 
 class TerraHandler():
 
-    def __init__(self, terra, mqtt_client, conf):
+    def __init__(self, terra, mqtt_client, conf, conf_dir: str = "conf"):
         self._terrarium = terra
         self._mqtt_client = mqtt_client
         self._conf = conf
+        self._conf_dir = conf_dir
+
+        # Initialize ConfigManager for runtime config updates
+        self._config_manager = ConfigManager(conf_dir)
 
         self._follow_planning = conf.planning.active() # Whether to follow the planning or not
         self._current_mode = None
@@ -29,32 +35,54 @@ class TerraHandler():
         # Topics possible: 
         #  - planning/active 
         #  - mode/set (works only if planning is not active)
+        #  - config/get - request full configuration
+        #  - config/update - update configuration section
 
         # Get the topic and the message
         topic = message.topic
-        message = message.payload.decode("utf-8")
+        payload = message.payload.decode("utf-8")
 
-        print(f"Received message on topic {topic}: {message}")
         if topic == "planning/active":
-            self._follow_planning = message == "1"
+            self._follow_planning = payload == "1"
 
         elif topic == "mode/set":
             if not self._follow_planning:
-                self.set_mode(message)
-        elif topic == "get_conf":
-            print("Sending conf")
-            conf = {
-                "planning": {
-                    "active": self._follow_planning,
-                },
-                "modes": list(self._conf.modes),
-                "current_mode": self._current_mode
-            }
-            self._mqtt_client.publish("conf", json.dumps(conf))
+                self._current_mode = payload
 
+        elif topic == "config/get":
+            # Send full configuration to frontend
+            self._publish_full_config()
+
+        elif topic == "config/update":
+            # Handle configuration update request
+            try:
+                update = json.loads(payload)
+                success, message = self._config_manager.apply_config_update(
+                    update, self._conf, self
+                )
+                # Publish status response
+                status = {"success": success, "message": message, "section": update.get("section")}
+                self._mqtt_client.publish("config/status", json.dumps(status))
+                
+                # If successful, also publish updated full config
+                if success:
+                    self._publish_full_config()
+            except json.JSONDecodeError as e:
+                status = {"success": False, "message": f"Invalid JSON: {str(e)}"}
+                self._mqtt_client.publish("config/status", json.dumps(status))
+            except Exception as e:
+                status = {"success": False, "message": f"Error: {str(e)}"}
+                self._mqtt_client.publish("config/status", json.dumps(status))
         else:
             print(f"Unknown topic {topic}")
-        
+
+    def _publish_full_config(self):
+        """Publish the full configuration to the config/full topic."""
+        full_config = self._config_manager.get_full_config(self._conf)
+        # Add current runtime state
+        full_config["planning"]["active"] = self._follow_planning
+        full_config["current_mode"] = self._current_mode
+        self._mqtt_client.publish("config/full", json.dumps(full_config))
 
 
     def run(self):
@@ -62,9 +90,13 @@ class TerraHandler():
         # Subscribe to topics
         self._mqtt_client.subscribe("planning/active")
         self._mqtt_client.subscribe("mode/set")
-        self._mqtt_client.subscribe("get_conf")
+        self._mqtt_client.subscribe("config/get")
+        self._mqtt_client.subscribe("config/update")
         
         self._mqtt_client.on_message(self._handle_message)
+        
+        # Publish initial config on startup
+        self._publish_full_config()
 
         # Start the loop
         while True:
@@ -78,38 +110,26 @@ class TerraHandler():
             if time.time() - self._last_log >= self._log_interval:
                 self._last_log = time.time()
                 for sensor_name, sensor_data in data.items():
-
-                    if sensor_data is None:
-                        print(f"Error while reading data from sensor {sensor_name}")
-                        continue
-
                     for data_name, data_value in sensor_data.items():
                         self._mqtt_client.publish(f"sensor/{sensor_name}/{data_name}", str(data_value))
                         print(f"sensor/{sensor_name}/{data_name}: {str(data_value)}")
 
-                # Send the current mode
+                # Send current mode
                 self._mqtt_client.publish("mode", self._current_mode)
                 print(f"mode: {self._current_mode}")
 
             # Get the mode
-            tmp_mode = self.get_mode()
-            self.set_mode(tmp_mode)
+            self._current_mode = self.get_mode()
 
             mode_params = self._conf.modes[self._current_mode]
-            target_controls_states = {control_name: mode_params[control_name]() for control_name in mode_params.keys()}
+            target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.keys()}
 
             for control_name, control in self._terrarium.controls.items():
                 # Set the control state
-                control.switch(target_controls_states.get(control_name, target_controls_states[control_name]))
-
-            # Receive messages
-            self._mqtt_client.loop(timeout=1)
-
-
-    def set_mode(self, mode):
-        if mode != self._current_mode:
-            print(f"Changing mode from {self._current_mode} to {mode}")
-            self._current_mode = mode
+                control.switch(target_controls_states.get(control_name, False))
+            
+            # Sleep for 1 second
+            time.sleep(1)
 
 
     def get_mode(self):
@@ -124,13 +144,7 @@ class TerraHandler():
                 end_hour, end_minute = int(end_hour), int(end_minute)
 
                 # Check if the current time is in the period
-                if start_hour <= current_time.hour <= end_hour:
-                    if start_hour == current_time.hour:
-                        if current_time.minute < start_minute:
-                            continue
-                    if end_hour == current_time.hour:
-                        if current_time.minute >= end_minute:
-                            continue
+                if start_hour <= current_time.hour <= end_hour and start_minute <= current_time.minute <= end_minute:
                     return period.mode()
 
                 

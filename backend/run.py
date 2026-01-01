@@ -2,9 +2,12 @@ import terrapi as tp
 from xpipe.config import load_config
 import click
 import time
+import os
 import board
 import adafruit_dht
 import RPi.GPIO as GPIO
+
+GPIO.setmode(GPIO.BCM)
 
 follow_planning = True 
 current_mode = None
@@ -27,14 +30,11 @@ def run_robust(conf):
             global current_mode
             global devices_pins
 
-            follow_planning = True 
-            current_mode = None
-            devices_pins = {} 
-
-            GPIO.setmode(GPIO.BCM)
-
             # Load config file
             config = load_config(conf)
+            
+            # Get the config directory from the config file path
+            conf_dir = os.path.dirname(conf)
 
             # Connect to mosquitto broker
             client = tp.client.MosquittoClient(config.mqtt.host(), config.mqtt.port())
@@ -44,7 +44,7 @@ def run_robust(conf):
             terrarium = tp.terrarium.Terrarium(config)
 
             # Create TerraHandler
-            terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config)
+            terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config, conf_dir)
 
             # run 
             terra_handler.run()
@@ -59,11 +59,10 @@ def run_robust(conf):
             # Print whole stack trace
             import traceback
             traceback.print_exc()
+
             
             print("Retrying in 10s")
-
             GPIO.cleanup()
-
             if client is not None:
                 client.disconnect()
             time.sleep(10)
