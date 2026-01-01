@@ -126,7 +126,6 @@ class TerraHandler():
         
         # Start the loop
         while True:
-            print("Entering main loop iteration...")
             # Get the data from the sensors
             data = {}
             for sensor_name, sensor in self._terrarium.sensors.items():
