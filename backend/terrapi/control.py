@@ -22,11 +22,11 @@ class Relay(Control):
         self.switch_off()
 
     def switch_on(self):
-        GPIO.output(self._pin, GPIO.HIGH)
+        GPIO.output(self._pin, GPIO.LOW)
         self._state = True
 
     def switch_off(self):
-        GPIO.output(self._pin, GPIO.LOW)
+        GPIO.output(self._pin, GPIO.HIGH)
         self._state = False
 
     def switch(self, state):
