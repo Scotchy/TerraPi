@@ -76,6 +76,108 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
         }));
     };
 
+    handleModeNameChange = (oldName: string, newName: string) => {
+        if (newName === oldName) return;
+        if (newName.trim() === '') return;
+        
+        this.setState(prevState => {
+            const { [oldName]: modeData, ...restModes } = prevState.editedModes;
+            
+            // Also update any references in planning periods
+            const updatedPeriods = { ...prevState.editedPlanning.periods };
+            Object.keys(updatedPeriods).forEach(periodName => {
+                if (updatedPeriods[periodName].mode === oldName) {
+                    updatedPeriods[periodName] = {
+                        ...updatedPeriods[periodName],
+                        mode: newName
+                    };
+                }
+            });
+            
+            // Update default_mode if it references the renamed mode
+            const updatedDefaultMode = prevState.editedPlanning.default_mode === oldName 
+                ? newName 
+                : prevState.editedPlanning.default_mode;
+            
+            return {
+                editedModes: {
+                    ...restModes,
+                    [newName]: modeData
+                },
+                editedPlanning: {
+                    ...prevState.editedPlanning,
+                    default_mode: updatedDefaultMode,
+                    periods: updatedPeriods
+                },
+                hasChanges: true
+            };
+        });
+    };
+
+    handleAddMode = () => {
+        const controlNames = this.getControlNames();
+        
+        // Generate a unique mode name
+        let newModeName = 'new_mode';
+        let counter = 1;
+        while (this.state.editedModes[newModeName]) {
+            newModeName = `new_mode_${counter}`;
+            counter++;
+        }
+        
+        // Create mode with all controls set to false
+        const newModeData: { [controlName: string]: boolean } = {};
+        controlNames.forEach(control => {
+            newModeData[control] = false;
+        });
+        
+        this.setState(prevState => ({
+            editedModes: {
+                ...prevState.editedModes,
+                [newModeName]: newModeData
+            },
+            hasChanges: true
+        }));
+    };
+
+    handleDeleteMode = (modeName: string) => {
+        // Prevent deleting the last mode
+        if (Object.keys(this.state.editedModes).length <= 1) {
+            return;
+        }
+        
+        this.setState(prevState => {
+            const { [modeName]: _, ...restModes } = prevState.editedModes;
+            const remainingModes = Object.keys(restModes);
+            
+            // Set periods using the deleted mode to empty (None) - they will do nothing
+            const updatedPeriods = { ...prevState.editedPlanning.periods };
+            Object.keys(updatedPeriods).forEach(periodName => {
+                if (updatedPeriods[periodName].mode === modeName) {
+                    updatedPeriods[periodName] = {
+                        ...updatedPeriods[periodName],
+                        mode: ''
+                    };
+                }
+            });
+            
+            // Default mode still needs a valid mode, use first remaining
+            const updatedDefaultMode = prevState.editedPlanning.default_mode === modeName
+                ? remainingModes[0] || ''
+                : prevState.editedPlanning.default_mode;
+            
+            return {
+                editedModes: restModes,
+                editedPlanning: {
+                    ...prevState.editedPlanning,
+                    default_mode: updatedDefaultMode,
+                    periods: updatedPeriods
+                },
+                hasChanges: true
+            };
+        });
+    };
+
     handlePlanningActiveChange = (active: boolean) => {
         this.setState(prevState => ({
             editedPlanning: {
@@ -198,25 +300,50 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
     renderModesTab() {
         const controlNames = this.getControlNames();
         const modeNames = this.getModeNames();
+        const canDelete = modeNames.length > 1;
 
         return (
             <div className="settings-section">
-                <h3>Modes Configuration</h3>
-                <p className="settings-hint">Configure which controls are active in each mode.</p>
+                <div className="section-header">
+                    <div>
+                        <h3>Modes Configuration</h3>
+                        <p className="settings-hint">Configure which controls are active in each mode.</p>
+                    </div>
+                    <button 
+                        className="btn btn-add" 
+                        onClick={this.handleAddMode}
+                        title="Add new mode"
+                    >
+                        + Add Mode
+                    </button>
+                </div>
                 
                 <table className="settings-table">
                     <thead>
                         <tr>
-                            <th>Mode</th>
+                            <th>Mode Name</th>
                             {controlNames.map(control => (
                                 <th key={control}>{control}</th>
                             ))}
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {modeNames.map(modeName => (
                             <tr key={modeName}>
-                                <td className="mode-name">{modeName}</td>
+                                <td>
+                                    <input
+                                        type="text"
+                                        className="mode-name-input"
+                                        defaultValue={modeName}
+                                        onBlur={(e) => this.handleModeNameChange(modeName, e.target.value.trim())}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                (e.target as HTMLInputElement).blur();
+                                            }
+                                        }}
+                                    />
+                                </td>
                                 {controlNames.map(controlName => (
                                     <td key={controlName}>
                                         <label className="toggle-switch">
@@ -229,6 +356,16 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                                         </label>
                                     </td>
                                 ))}
+                                <td>
+                                    <button
+                                        className="btn-delete"
+                                        onClick={() => this.handleDeleteMode(modeName)}
+                                        title={canDelete ? "Delete mode" : "Cannot delete the last mode"}
+                                        disabled={!canDelete}
+                                    >
+                                        ×
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -327,7 +464,9 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                                     <select
                                         value={periods[periodName].mode}
                                         onChange={(e) => this.handlePeriodChange(periodName, 'mode', e.target.value)}
+                                        className={periods[periodName].mode === '' ? 'mode-none' : ''}
                                     >
+                                        <option value="" className="mode-none-option">(None)</option>
                                         {modeNames.map(mode => (
                                             <option key={mode} value={mode}>{mode}</option>
                                         ))}
