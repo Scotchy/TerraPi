@@ -126,14 +126,17 @@ class TerraHandler():
         
         # Start the loop
         while True:
-
+            print("Entering main loop iteration...")
             # Get the data from the sensors
             data = {}
             for sensor_name, sensor in self._terrarium.sensors.items():
+                print(f"[SENSOR] Reading data from sensor '{sensor_name}'...")
                 data[sensor_name] = sensor.get_data()
+                print(f"[SENSOR] Collected sensor data: {data}")
             
             # Get the mode FIRST (before publishing)
             self._current_mode = self.get_mode()
+            print(f"[MODE] Current mode determined: {self._current_mode}")
 
             # Send the data to mqtt
             if time.time() - self._last_log >= self._log_interval:
@@ -156,6 +159,7 @@ class TerraHandler():
             for control_name, control in self._terrarium.controls.items():
                 # Set the control state
                 control.switch(target_controls_states.get(control_name, False))
+                print(f"[CONTROL] Control '{control_name}' set to state: {target_controls_states.get(control_name, False)}")
             
             # Sleep for 1 second
             time.sleep(1)
