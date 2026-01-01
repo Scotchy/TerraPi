@@ -1,4 +1,4 @@
-from xpipe.config import to_dict
+from terrapi.config_loader import instantiate_sensors, instantiate_controls
 import time
 
 class Terrarium():
@@ -6,7 +6,7 @@ class Terrarium():
     def __init__(self, conf):
         self._conf = conf
         print("Initializing sensors...")
-        self.sensors = { sensor_name: sensor() for sensor_name, sensor in conf.sensors.items() }
+        self.sensors = instantiate_sensors(conf.sensors.to_dict())
         time.sleep(2)
         print("Initializing controls...")
-        self.controls = { control_name: control() for control_name, control in conf.controls.items() }
+        self.controls = instantiate_controls(conf.controls.to_dict())

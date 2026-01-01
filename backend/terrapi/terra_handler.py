@@ -4,7 +4,6 @@ import RPi.GPIO as GPIO
 import terrapi.sensor as sensor
 from terrapi.terrarium import Terrarium
 from terrapi.config_manager import ConfigManager
-from xpipe.config import to_dict
 import time
 import json
 import os
@@ -12,23 +11,23 @@ from datetime import datetime
 
 class TerraHandler():
 
-    def __init__(self, terra, mqtt_client, conf, conf_dir: str = "conf"):
+    def __init__(self, terra, mqtt_client, conf, config_path: str = "conf/config.yaml"):
         self._terrarium = terra
         self._mqtt_client = mqtt_client
         self._conf = conf
-        self._conf_dir = conf_dir
+        self._config_path = config_path
 
         # Initialize ConfigManager for runtime config updates
-        self._config_manager = ConfigManager(conf_dir)
+        self._config_manager = ConfigManager(config_path)
 
-        self._follow_planning = conf.planning.active() # Whether to follow the planning or not
+        self._follow_planning = conf.planning.active  # Whether to follow the planning or not
         self._current_mode = None
-        self._default_mode = conf.planning.default_mode() # Default mode
-        self._planning_periods = conf.planning.periods # Planning periods
+        self._default_mode = conf.planning.default_mode  # Default mode
+        self._planning_periods = conf.planning.periods  # Planning periods
 
-        self._loop_interval = 1 # Loop interval in seconds
-        self._log_interval = conf.log_interval() # Log interval in seconds
-        self._last_log = 0 # Last time the data was logged
+        self._loop_interval = 1  # Loop interval in seconds
+        self._log_interval = conf.log_interval  # Log interval in seconds
+        self._last_log = 0  # Last time the data was logged
 
         # Set message handler BEFORE connection (called from run.py after this)
         self._mqtt_client.on_message(self._handle_message)
@@ -157,14 +156,14 @@ class TerraHandler():
             current_time = datetime.now()
             for period in self._planning_periods.values():
                 # Str to hour and minute
-                start_hour, start_minute = period.start().split(":")
-                end_hour, end_minute = period.end().split(":")
+                start_hour, start_minute = period.start.split(":")
+                end_hour, end_minute = period.end.split(":")
                 start_hour, start_minute = int(start_hour), int(start_minute)
                 end_hour, end_minute = int(end_hour), int(end_minute)
 
                 # Check if the current time is in the period
                 if start_hour <= current_time.hour <= end_hour and start_minute <= current_time.minute <= end_minute:
-                    return period.mode()
+                    return period.mode
 
                 
             # If no period is active, return the default mode

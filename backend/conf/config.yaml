@@ -1,0 +1,60 @@
+# TerraPi Configuration
+# All settings in one file
+
+mqtt:
+  host: plantescarnivores.net
+  port: 1883
+  user: ${MQTT_USER}
+  password: ${MQTT_PASSWORD}
+
+log_interval: 60
+
+# Sensor definitions
+# type: class name in terrapi.sensor module
+# pin: GPIO pin number (BCM mode)
+sensors:
+  dht22:
+    type: DHT22
+    pin: 17
+
+# Control definitions  
+# type: class name in terrapi.control module
+# pin: GPIO pin number (BCM mode)
+controls:
+  cooling_system:
+    type: Relay
+    pin: 7
+  light:
+    type: Relay
+    pin: 8
+
+# Mode definitions
+# Each mode defines the state of each control
+modes:
+  day:
+    light: true
+    cooling_system: false
+  night:
+    light: false
+    cooling_system: true
+  "off":
+    light: false
+    cooling_system: false
+
+# Planning/scheduling configuration
+planning:
+  active: true
+  default_mode: "off"
+  periods:
+    day:
+      start: "07:00"
+      end: "17:00"
+      mode: day
+    night:
+      start: "22:00"
+      end: "07:00"
+      mode: night
+    "off":
+      start: "17:00"
+      end: "22:00"
+      mode: "off"

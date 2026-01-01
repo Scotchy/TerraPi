@@ -10,16 +10,15 @@ TerraPi is a **Raspberry Pi terrarium control system** with a unified monorepo s
 TerraPi/
 ├── backend/
 │   ├── run.py              # Entry point
-│   ├── conf/               # YAML configuration
-│   │   ├── main.yaml
-│   │   ├── modes.yaml
-│   │   └── planning.yaml
+│   ├── conf/
+│   │   └── config.yaml     # Unified YAML configuration
 │   └── terrapi/            # Core Python package
 │       ├── terrarium.py
 │       ├── terra_handler.py
 │       ├── sensor.py
 │       ├── control.py
 │       ├── client.py
+│       ├── config_loader.py   # Custom YAML loader with env var substitution
 │       └── config_manager.py  # Runtime config updates
 ├── frontend/
 │   ├── src/
@@ -51,6 +50,7 @@ RPi GPIO Sensors (DHT22) → TerraHandler → MQTT Broker ↔ React Frontend
 - `sensor.py`: DHT22 sensor wrapper
 - `control.py`: GPIO relay wrapper
 - `client.py`: MQTT client (Paho)
+- `config_loader.py`: Custom YAML loader with `${ENV_VAR}` substitution and dynamic class instantiation
 - `config_manager.py`: Runtime configuration updates—validates and persists changes to YAML
 
 **Frontend** (`/frontend/src/components/`):
@@ -60,10 +60,13 @@ RPi GPIO Sensors (DHT22) → TerraHandler → MQTT Broker ↔ React Frontend
 - `Toast.tsx`: Success/error notification component
 
 ### Config System
-YAML-based with `xpipe.config` (custom config loader):
-- `backend/conf/main.yaml`: MQTT connection, sensor/control pin mappings, log interval
-- `backend/conf/modes.yaml`: Environmental mode profiles (temperature/humidity targets)
-- `backend/conf/planning.yaml`: Time-based scheduling (default mode, active periods)
+Single unified YAML configuration file (`backend/conf/config.yaml`) with:
+- `mqtt`: Connection settings (host, port, user, password with `${ENV_VAR}` substitution)
+- `log_interval`: Seconds between sensor data logs
+- `sensors`: Sensor definitions with `type` (class name) and `pin` (GPIO BCM pin)
+- `controls`: Control definitions with `type` (class name) and `pin` (GPIO BCM pin)
+- `modes`: Mode profiles defining control states (e.g., `day: {light: true, cooling_system: false}`)
+- `planning`: Scheduling with `active`, `default_mode`, and `periods` (start/end times and mode)
 
 ## MQTT Topics Architecture
 
@@ -84,7 +87,9 @@ YAML-based with `xpipe.config` (custom config loader):
 ### Running Backend
 ```bash
 cd backend
-python run.py --conf conf/main.yaml
+python run.py  # Uses conf/config.yaml by default
+# Or specify a different config:
+python run.py --conf path/to/config.yaml
 ```
 Requires GPIO access (RPi only) and MQTT broker connectivity.
 
@@ -98,19 +103,19 @@ npm run build   # Production build
 Hardcoded MQTT broker: `plantescarnivores.net:9001` (see `frontend/src/components/terra.tsx`)
 
 ### Configuration
-- Sensors/controls added in `main.yaml` with class references: `!obj terrapi.sensor.DHT22`
+- Sensors/controls defined in `config.yaml` with `type` (class name) and `pin` (GPIO pin)
 - New sensor types extend `Sensor` base class, implement `get_data()` returning dict
-- New control types extend `Control` base class, implement `switch_on()`, `switch_off()`
-- Backend loops every 1 second, logs every N seconds (configurable)
+- New control types extend `Control` base class, implement `switch_on()`, `switch_off()`, `switch(bool)`
+- Backend loops every 1 second, logs every N seconds (configurable via `log_interval`)
 
 ## Key Patterns & Conventions
 
-1. **Dynamic Object Initialization**: YAML uses `!obj` tags to instantiate Python classes—adding a new sensor requires:
+1. **Dynamic Object Initialization**: Config uses `type` field to specify Python class name—adding a new sensor requires:
    - Extending `Sensor` class in `sensor.py`
-   - Adding entry in `conf/main.yaml` with `!obj terrapi.sensor.YourSensor`
+   - Adding entry in `conf/config.yaml` with `type: YourSensorClass` and appropriate pins
    - Publishing data to matching MQTT topics in `terra_handler.py`
 
-2. **Planning/Mode Logic**: `TerraHandler` reads `planning.active()`. If true, uses schedule; if false, respects `mode/set` commands.
+2. **Planning/Mode Logic**: `TerraHandler` reads `planning.active`. If true, uses schedule; if false, respects `mode/set` commands.
 
 3. **Frontend State Management**: React class component (not hooks) with MQTT message handler calling `setState()` on topic match.
 
@@ -118,13 +123,13 @@ Hardcoded MQTT broker: `plantescarnivores.net:9001` (see `frontend/src/component
 
 ## Integration Points
 
-- **Xpipe Config**: External dependency for YAML loading with environment variable substitution (`!env`)
+- **Custom Config Loader**: `config_loader.py` handles YAML loading with `${ENV_VAR}` substitution (no external dependencies)
 - **Paho MQTT**: Python backend and `react-paho-mqtt` frontend (similar APIs)
 - **Adafruit DHTlib**: For DHT22 sensor reads (requires `board` and `adafruit_dht` modules)
-- **RPi.GPIO**: For relay control (hardcoded BCM mode in `run.py` line 7)
+- **RPi.GPIO**: For relay control (hardcoded BCM mode in `run.py`)
 
 ## Important Context
 - MQTT credentials stored in browser cookies (username/password prompt on first load)
 - Frontend hostname hardcoded (`plantescarnivores.net`)—for local development, modify connection URL in `terra.tsx`
-- Config files support YAML includes (`!include`) for modular setup
+- Environment variables for MQTT credentials: `MQTT_USER`, `MQTT_PASSWORD`
 - No test files present; manual testing or integration tests recommended before deployment
