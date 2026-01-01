@@ -441,56 +441,60 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                                                         </label>
                                                     </div>
                                                     
-                                                    <div className="thermostat-row">
-                                                        <label>Target</label>
-                                                        <input
-                                                            type="number"
-                                                            step="0.5"
-                                                            value={controlValue.target_temperature}
-                                                            onChange={(e) => this.handleThermostatChange(modeName, controlName, 'target_temperature', parseFloat(e.target.value) || 0)}
-                                                            className="thermostat-input"
-                                                        />
-                                                        <span className="unit">°C</span>
-                                                    </div>
-                                                    
-                                                    <div className="thermostat-row">
-                                                        <label>Hysteresis</label>
-                                                        <input
-                                                            type="number"
-                                                            step="0.1"
-                                                            min="0"
-                                                            max="10"
-                                                            value={controlValue.hysteresis}
-                                                            onChange={(e) => this.handleThermostatChange(modeName, controlName, 'hysteresis', parseFloat(e.target.value) || 0)}
-                                                            className="thermostat-input"
-                                                        />
-                                                        <span className="unit">±°C</span>
-                                                    </div>
-                                                    
-                                                    <div className="thermostat-row">
-                                                        <label>Sensor</label>
-                                                        <select
-                                                            value={controlValue.sensor}
-                                                            onChange={(e) => this.handleThermostatChange(modeName, controlName, 'sensor', e.target.value)}
-                                                            className="thermostat-select"
-                                                        >
-                                                            {sensorNames.map(s => (
-                                                                <option key={s} value={s}>{s}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    
-                                                    <div className="thermostat-row">
-                                                        <label>Action</label>
-                                                        <select
-                                                            value={controlValue.action}
-                                                            onChange={(e) => this.handleThermostatChange(modeName, controlName, 'action', e.target.value as 'cooling' | 'heating')}
-                                                            className="thermostat-select"
-                                                        >
-                                                            <option value="cooling">Cooling</option>
-                                                            <option value="heating">Heating</option>
-                                                        </select>
-                                                    </div>
+                                                    {controlValue.enabled && (
+                                                        <>
+                                                            <div className="thermostat-row">
+                                                                <label>Target</label>
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.5"
+                                                                    value={controlValue.target_temperature}
+                                                                    onChange={(e) => this.handleThermostatChange(modeName, controlName, 'target_temperature', parseFloat(e.target.value) || 0)}
+                                                                    className="thermostat-input"
+                                                                />
+                                                                <span className="unit">°C</span>
+                                                            </div>
+                                                            
+                                                            <div className="thermostat-row">
+                                                                <label>Hysteresis</label>
+                                                                <input
+                                                                    type="number"
+                                                                    step="0.1"
+                                                                    min="0"
+                                                                    max="10"
+                                                                    value={controlValue.hysteresis}
+                                                                    onChange={(e) => this.handleThermostatChange(modeName, controlName, 'hysteresis', parseFloat(e.target.value) || 0)}
+                                                                    className="thermostat-input"
+                                                                />
+                                                                <span className="unit">±°C</span>
+                                                            </div>
+                                                            
+                                                            <div className="thermostat-row">
+                                                                <label>Sensor</label>
+                                                                <select
+                                                                    value={controlValue.sensor}
+                                                                    onChange={(e) => this.handleThermostatChange(modeName, controlName, 'sensor', e.target.value)}
+                                                                    className="thermostat-select"
+                                                                >
+                                                                    {sensorNames.map(s => (
+                                                                        <option key={s} value={s}>{s}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            
+                                                            <div className="thermostat-row">
+                                                                <label>Action</label>
+                                                                <select
+                                                                    value={controlValue.action}
+                                                                    onChange={(e) => this.handleThermostatChange(modeName, controlName, 'action', e.target.value as 'cooling' | 'heating')}
+                                                                    className="thermostat-select"
+                                                                >
+                                                                    <option value="cooling">Cooling</option>
+                                                                    <option value="heating">Heating</option>
+                                                                </select>
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <label className="toggle-switch">
