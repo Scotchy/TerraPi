@@ -17,6 +17,7 @@ class MosquittoClient(Client):
     def connect(self, username, password):
         self.client.username_pw_set(username, password)
         self.client.connect(self.host, self.port)
+        self.client.loop_start()  # Start background thread to process messages
 
     def send_message(self, topic, message):
         self.client.publish(topic, message)
@@ -25,6 +26,7 @@ class MosquittoClient(Client):
         self.client.on_message = callback
         
     def disconnect(self):
+        self.client.loop_stop()  # Stop background thread
         self.client.disconnect()
 
     def subscribe(self, topic):
