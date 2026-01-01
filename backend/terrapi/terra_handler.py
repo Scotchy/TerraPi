@@ -167,27 +167,44 @@ class TerraHandler():
         # Set mode according to the planning if needed
         if self._follow_planning:
             current_time = datetime.now()
-            print(f"[MODE] Following planning, current time: {current_time.strftime('%H:%M')}")
+            current_minutes = current_time.hour * 60 + current_time.minute  # Convert to minutes since midnight
+            print(f"[MODE] Following planning, current time: {current_time.strftime('%H:%M')} ({current_minutes} min)")
+            
             # Read periods directly from config to get latest values
             planning_periods = self._conf.planning.periods
             for period_name in planning_periods.keys():
                 period = planning_periods[period_name]
                 # Str to hour and minute
-                start_hour, start_minute = str(period.start).split(":")
-                end_hour, end_minute = str(period.end).split(":")
-                start_hour, start_minute = int(start_hour), int(start_minute)
-                end_hour, end_minute = int(end_hour), int(end_minute)
-
-                print(f"[MODE] Checking period '{period_name}': {start_hour:02d}:{start_minute:02d} - {end_hour:02d}:{end_minute:02d} -> mode '{period.mode}'")
+                start_parts = str(period.start).split(":")
+                end_parts = str(period.end).split(":")
+                start_hour, start_minute = int(start_parts[0]), int(start_parts[1])
+                end_hour, end_minute = int(end_parts[0]), int(end_parts[1])
+                
+                start_minutes = start_hour * 60 + start_minute
+                end_minutes = end_hour * 60 + end_minute
+                
+                # Get the mode for this period
+                period_mode = period.mode
+                print(f"[MODE] Checking period '{period_name}': {start_hour:02d}:{start_minute:02d} - {end_hour:02d}:{end_minute:02d} -> mode '{period_mode}'")
 
                 # Check if the current time is in the period
-                if start_hour <= current_time.hour <= end_hour and start_minute <= current_time.minute <= end_minute:
-                    print(f"[MODE] Matched period '{period_name}', using mode '{period.mode}'")
-                    return period.mode
+                # Handle overnight periods (e.g., 22:00 - 07:00)
+                if start_minutes <= end_minutes:
+                    # Normal period (same day): e.g., 07:00 - 17:00
+                    if start_minutes <= current_minutes < end_minutes:
+                        print(f"[MODE] Matched period '{period_name}', using mode '{period_mode}'")
+                        return period_mode
+                else:
+                    # Overnight period: e.g., 22:00 - 07:00
+                    # Current time is in period if it's >= start OR < end
+                    if current_minutes >= start_minutes or current_minutes < end_minutes:
+                        print(f"[MODE] Matched overnight period '{period_name}', using mode '{period_mode}'")
+                        return period_mode
                 
             # If no period is active, return the default mode from config (for hot-reload support)
-            print(f"[MODE] No period matched, using default mode '{self._conf.planning.default_mode}'")
-            return self._conf.planning.default_mode
+            default_mode = self._conf.planning.default_mode
+            print(f"[MODE] No period matched, using default mode '{default_mode}'")
+            return default_mode
             
         else:
             # Remain unchanged
