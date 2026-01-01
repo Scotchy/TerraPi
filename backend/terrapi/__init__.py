@@ -4,3 +4,4 @@ from . import client
 from . import sensor
 from . import control
 from . import config_manager
+from . import config_loader

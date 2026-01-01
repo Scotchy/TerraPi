@@ -1,73 +1,79 @@
 """
 Configuration Manager for TerraPi.
-Handles reading, writing, and validating YAML configuration files.
+Handles reading, writing, and validating the unified YAML configuration file.
 """
 
 import os
 import yaml
-import json
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
+
+from terrapi.config_loader import Config
 
 
 class ConfigManager:
     """Manages runtime configuration updates and YAML persistence."""
 
-    def __init__(self, conf_dir: str):
+    def __init__(self, config_path: str):
         """
-        Initialize ConfigManager with the configuration directory.
+        Initialize ConfigManager with the config file path.
         
         Args:
-            conf_dir: Path to the conf/ directory containing YAML files.
+            config_path: Path to the config.yaml file.
         """
-        self._conf_dir = conf_dir
-        self._modes_file = os.path.join(conf_dir, "modes.yaml")
-        self._planning_file = os.path.join(conf_dir, "planning.yaml")
-        self._main_file = os.path.join(conf_dir, "main.yaml")
+        self._config_path = config_path
 
-    def get_full_config(self, conf) -> Dict[str, Any]:
+    def get_full_config(self, conf: Config) -> Dict[str, Any]:
         """
         Get the full configuration as a JSON-serializable dict.
         
         Args:
-            conf: The xpipe config object.
+            conf: The Config object.
             
         Returns:
             Dict with all configuration sections.
         """
-        # Build modes dict
+        # Build modes dict (direct attribute access)
         modes = {}
         for mode_name in conf.modes.keys():
-            mode_params = conf.modes[mode_name]
-            modes[mode_name] = {
-                control: mode_params[control]()
-                for control in mode_params.keys()
-            }
+            mode_data = conf.modes[mode_name]
+            if hasattr(mode_data, 'to_dict'):
+                modes[mode_name] = mode_data.to_dict()
+            elif hasattr(mode_data, '_data'):
+                modes[mode_name] = mode_data._data
+            elif hasattr(mode_data, 'items'):
+                modes[mode_name] = dict(mode_data.items())
+            else:
+                modes[mode_name] = {}
         
         # Build planning dict
+        planning_conf = conf.planning
         planning = {
-            "active": conf.planning.active(),
-            "default_mode": conf.planning.default_mode(),
+            "active": planning_conf.active,
+            "default_mode": planning_conf.default_mode,
             "periods": {}
         }
-        for period_name, period in conf.planning.periods.items():
+        for period_name in planning_conf.periods.keys():
+            period = planning_conf.periods[period_name]
             planning["periods"][period_name] = {
-                "start": period.start(),
-                "end": period.end(),
-                "mode": period.mode()
+                "start": period.start,
+                "end": period.end,
+                "mode": period.mode
             }
         
         # Build sensors dict (read-only info)
         sensors = {}
-        for sensor_name, sensor_class in conf.sensors.items():
+        for sensor_name in conf.sensors.keys():
+            sensor_conf = conf.sensors[sensor_name]
             sensors[sensor_name] = {
-                "type": type(sensor_class).__name__ if hasattr(sensor_class, '__name__') else str(sensor_class),
+                "type": sensor_conf.type if hasattr(sensor_conf, 'type') else str(sensor_conf),
             }
         
         # Build controls dict (read-only info)
         controls = {}
-        for control_name, control_class in conf.controls.items():
+        for control_name in conf.controls.keys():
+            control_conf = conf.controls[control_name]
             controls[control_name] = {
-                "type": type(control_class).__name__ if hasattr(control_class, '__name__') else str(control_class),
+                "type": control_conf.type if hasattr(control_conf, 'type') else str(control_conf),
             }
         
         return {
@@ -75,7 +81,7 @@ class ConfigManager:
             "planning": planning,
             "sensors": sensors,
             "controls": controls,
-            "log_interval": conf.log_interval()
+            "log_interval": conf.log_interval
         }
 
     def validate_modes(self, modes: Dict[str, Dict[str, bool]]) -> Tuple[bool, str]:
@@ -138,9 +144,19 @@ class ConfigManager:
         
         return True, ""
 
+    def _load_full_yaml(self) -> Dict[str, Any]:
+        """Load the full YAML config file."""
+        with open(self._config_path, 'r') as f:
+            return yaml.safe_load(f)
+
+    def _save_full_yaml(self, data: Dict[str, Any]) -> None:
+        """Save the full YAML config file."""
+        with open(self._config_path, 'w') as f:
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+
     def update_modes(self, modes: Dict[str, Dict[str, bool]]) -> Tuple[bool, str]:
         """
-        Update modes configuration and persist to YAML.
+        Update modes section in the unified config file.
         
         Args:
             modes: New modes configuration
@@ -153,15 +169,16 @@ class ConfigManager:
             return False, error
         
         try:
-            with open(self._modes_file, 'w') as f:
-                yaml.dump(modes, f, default_flow_style=False, sort_keys=False)
+            config = self._load_full_yaml()
+            config['modes'] = modes
+            self._save_full_yaml(config)
             return True, "Modes updated successfully"
         except Exception as e:
-            return False, f"Failed to write modes file: {str(e)}"
+            return False, f"Failed to update modes: {str(e)}"
 
     def update_planning(self, planning: Dict[str, Any]) -> Tuple[bool, str]:
         """
-        Update planning configuration and persist to YAML.
+        Update planning section in the unified config file.
         
         Args:
             planning: New planning configuration
@@ -174,19 +191,20 @@ class ConfigManager:
             return False, error
         
         try:
-            with open(self._planning_file, 'w') as f:
-                yaml.dump(planning, f, default_flow_style=False, sort_keys=False)
+            config = self._load_full_yaml()
+            config['planning'] = planning
+            self._save_full_yaml(config)
             return True, "Planning updated successfully"
         except Exception as e:
-            return False, f"Failed to write planning file: {str(e)}"
+            return False, f"Failed to update planning: {str(e)}"
 
-    def apply_config_update(self, update: Dict[str, Any], conf, terra_handler) -> Tuple[bool, str]:
+    def apply_config_update(self, update: Dict[str, Any], conf: Config, terra_handler) -> Tuple[bool, str]:
         """
         Apply a configuration update from the frontend.
         
         Args:
             update: Dict with section name and new values
-            conf: The xpipe config object
+            conf: The Config object
             terra_handler: The TerraHandler instance for runtime updates
             
         Returns:
@@ -201,9 +219,8 @@ class ConfigManager:
         if section == "modes":
             success, message = self.update_modes(data)
             if success:
-                # Hot-reload modes in memory
-                for mode_name, controls in data.items():
-                    conf.modes[mode_name] = type('Mode', (), controls)()
+                # Hot-reload modes in memory by updating the config's internal data
+                conf._data['modes'] = data
             return success, message
         
         elif section == "planning":
@@ -214,6 +231,8 @@ class ConfigManager:
                     terra_handler._follow_planning = data["active"]
                 if "default_mode" in data:
                     terra_handler._default_mode = data["default_mode"]
+                # Also update config's internal data
+                conf._data['planning'] = data
             return success, message
         
         else:

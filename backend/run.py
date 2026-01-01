@@ -1,5 +1,5 @@
 import terrapi as tp
-from xpipe.config import load_config
+from terrapi.config_loader import load_config
 import click
 import time
 import os
@@ -15,7 +15,7 @@ devices_pins = {}
 
 
 @click.command()
-@click.option('--conf', help='Path to config file', required=True)
+@click.option('--conf', help='Path to config file', default='conf/config.yaml')
 def run(conf):
     run_robust(conf)
 
@@ -32,21 +32,18 @@ def run_robust(conf):
 
             # Load config file
             config = load_config(conf)
-            
-            # Get the config directory from the config file path
-            conf_dir = os.path.dirname(conf)
 
             # Create the terrarium
             terrarium = tp.terrarium.Terrarium(config)
 
             # Create MQTT client (don't connect yet)
-            client = tp.client.MosquittoClient(config.mqtt.host(), config.mqtt.port())
+            client = tp.client.MosquittoClient(config.mqtt.host, config.mqtt.port)
 
             # Create TerraHandler (sets up message handler)
-            terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config, conf_dir)
+            terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config, conf)
 
             # Now connect (after message handler is set)
-            client.connect(config.mqtt.user(), config.mqtt.password())
+            client.connect(config.mqtt.user, config.mqtt.password)
 
             # run 
             terra_handler.run()
