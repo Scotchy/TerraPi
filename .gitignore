@@ -1,5 +1,2 @@
-
-__pycache__
-*.pyc
-read.py
-.vscode
+frontend/node_modules/
+__pycache__/

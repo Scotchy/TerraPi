@@ -1,0 +1,209 @@
+body {
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #e4e4e4;
+}
+
+#root {
+    height: 100%;
+}
+
+.App {
+    text-align: center;
+    width: 100%;
+    height: 100%;
+}
+
+.flex-container {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    height: 100%;
+}
+
+.flex-column {
+    flex: 1;
+    height: 100%;
+    flex-direction: column;
+    display: flex;
+}
+
+.flex-row {
+    flex-direction: row;
+    display: flex;
+}
+
+#sensors-row {
+    height: 50%;
+}
+
+#temperature {
+    background-color: #f3994f;
+    flex: 1;
+    height: 100%;
+    display: flex;
+}
+#temperature > .centered > .value {
+    font-size: 2.5em;
+    font-weight: bold;
+    color: #2c2b2b;
+}
+
+#humidity {
+    background-color: #736af7;
+    flex: 1;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    display: flex;
+}
+#humidity > .centered > .value {
+    font-size: 2.5em;
+    font-weight: bold;
+    color: #2c2b2b;
+}
+
+#controls-row {
+    height: 10%;
+}
+#control-cooling, #control-light {
+    flex-basis: 50%;
+    height: 100%;
+    display: flex;
+}
+
+#planning-row {
+    margin-top: 10px;
+    height: 10%;
+}
+#planning-checkbox {
+    flex-basis: 100%;
+}
+#planning-checkbox > .checkbox-button {
+    width: 150px;
+}
+
+#mode-row {
+    margin-top: 5px;
+    height: 20%;
+}
+#mode {
+    flex-basis: 100%;
+}
+#mode > .dropdown {
+    width: 150px;
+    margin: auto;
+}
+
+#change-login-row {
+    height: 10%;
+}
+.change-login {
+    flex-basis: 100%;
+}
+
+
+.centered {
+    margin: auto;
+}
+
+
+/* Dropdown */
+
+.dropdown {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.dropdown select {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    appearance: none;
+    -webkit-appearance: none;
+    /* background: url('/public/down-arrow.png') no-repeat right center; */
+    background-size: 16px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.dropdown select:focus {
+    outline: none;
+    border-color: #0066cc;
+}
+
+/* Hide the default arrow icon in Chrome and Safari */
+.dropdown select::-webkit-outer-spin-button,
+.dropdown select::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Hide the default arrow icon in Firefox */
+.dropdown select[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Custom arrow icon */
+.dropdown select option {
+    background-color: #f9f9f9;
+    color: #333;
+}
+
+/* Styling the dropdown when it's expanded */
+.dropdown select[multiple] {
+    height: auto;
+}
+
+.dropdown select[multiple] option {
+    padding: 8px 12px;
+}
+
+/* Checkbox */
+.checkbox-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0px;
+    border-radius: 0px;
+    background-color: #f9f9f9;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  
+  .checkbox-button:hover {
+    background-color: #f5f5f5;
+  }
+  
+  .checkbox-button input[type="checkbox"] {
+    display: none;
+  }
+  
+  .checkbox-button input[type="checkbox"]:checked ~ .label-text {
+    color: #0066cc;
+    background-color: #0066cc;
+    color: #fff;
+    text-decoration: none;
+  }
+  
+  .label-text {
+    margin-left: 0px;
+    font-size: 16px;
+    transition: color 0.3s, background-color 0.3s;
+    padding: 10px 15px;
+    border-radius: 0px;
+    text-decoration: line-through;
+
+    width: 100%;
+    height: 100%;
+
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10 and IE 11 */
+    user-select: none; /* Standard syntax */
+  }
