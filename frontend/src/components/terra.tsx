@@ -130,6 +130,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         this.client.subscribe("conf");
         this.client.subscribe("config/full");
         this.client.subscribe("config/status");
+        this.client.subscribe("mode");
 
         // Get current conf
         console.log("Publishing config/get request...");
@@ -188,6 +189,11 @@ export class Terra extends React.Component<TerraProps, TerraState> {
                 controls_state: state
             });
             
+        } else if (message.destinationName === "mode") {
+            // Current mode update from backend
+            this.setState({
+                current_mode: message.payloadString
+            });
         }
 
 
