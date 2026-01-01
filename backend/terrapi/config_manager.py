@@ -39,7 +39,7 @@ class ConfigManager:
         for mode_name in conf.modes.keys():
             mode_params = conf.modes[mode_name]
             modes[mode_name] = {
-                control: mode_params[control] 
+                control: mode_params[control]()
                 for control in mode_params.keys()
             }
         
