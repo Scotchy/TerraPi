@@ -14,6 +14,10 @@ class MosquittoClient(Client):
         super().__init__(host, port)
         self.client = mqtt.Client()
 
+    def on_message(self, callback):
+        """Set the message callback. Must be called BEFORE connect()."""
+        self.client.on_message = callback
+
     def connect(self, username, password):
         self.client.username_pw_set(username, password)
         self.client.connect(self.host, self.port)
@@ -21,9 +25,6 @@ class MosquittoClient(Client):
 
     def send_message(self, topic, message):
         self.client.publish(topic, message)
-
-    def on_message(self, callback):
-        self.client.on_message = callback
         
     def disconnect(self):
         self.client.loop_stop()  # Stop background thread
