@@ -13,6 +13,16 @@ class MosquittoClient(Client):
     def __init__(self, host, port):
         super().__init__(host, port)
         self.client = mqtt.Client()
+        
+        # Debug callbacks
+        def on_subscribe(client, userdata, mid, granted_qos):
+            print(f"[MQTT] Subscription confirmed (mid={mid}, qos={granted_qos})")
+        
+        def on_connect(client, userdata, flags, rc):
+            print(f"[MQTT] Connected to broker (rc={rc})")
+        
+        self.client.on_subscribe = on_subscribe
+        self.client.on_connect = on_connect
 
     def on_message(self, callback):
         """Set the message callback. Must be called BEFORE connect()."""
