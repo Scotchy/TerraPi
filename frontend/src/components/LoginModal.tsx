@@ -33,6 +33,17 @@ export class LoginModal extends React.Component<LoginModalProps, LoginModalState
         this.checkBiometricAvailability();
     }
 
+    componentDidUpdate(prevProps: LoginModalProps) {
+        // Reset loading state when an error is received or when modal becomes visible
+        if (this.props.error && this.props.error !== prevProps.error) {
+            this.setState({ isLoading: false });
+        }
+        // Also reset loading when modal is shown again
+        if (this.props.visible && !prevProps.visible) {
+            this.setState({ isLoading: false });
+        }
+    }
+
     checkBiometricAvailability = async () => {
         // Check if WebAuthn is available
         if (window.PublicKeyCredential) {
