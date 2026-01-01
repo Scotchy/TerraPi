@@ -1,7 +1,37 @@
 import * as React from 'react';
 
+// Thermostat configuration for temperature-controlled relays
+interface ThermostatConfig {
+    type: 'thermostat';
+    enabled: boolean;
+    target_temperature: number;
+    hysteresis: number;
+    sensor: string;
+    action: 'cooling' | 'heating';
+}
+
+// Control value can be a simple boolean or a thermostat config
+type ControlValue = boolean | ThermostatConfig;
+
+// Helper to check if a control value is a thermostat config
+function isThermostatConfig(value: ControlValue): value is ThermostatConfig {
+    return typeof value === 'object' && value !== null && value.type === 'thermostat';
+}
+
+// Helper to create a default thermostat config
+function createDefaultThermostatConfig(sensorName: string = 'dht22'): ThermostatConfig {
+    return {
+        type: 'thermostat',
+        enabled: false,
+        target_temperature: 25.0,
+        hysteresis: 1.0,
+        sensor: sensorName,
+        action: 'cooling'
+    };
+}
+
 interface Mode {
-    [controlName: string]: boolean;
+    [controlName: string]: ControlValue;
 }
 
 interface Period {
@@ -63,7 +93,7 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
         }
     }
 
-    handleModeControlChange = (modeName: string, controlName: string, value: boolean) => {
+    handleModeControlChange = (modeName: string, controlName: string, value: ControlValue) => {
         this.setState(prevState => ({
             editedModes: {
                 ...prevState.editedModes,
@@ -75,6 +105,34 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
             hasChanges: true
         }));
     };
+
+    handleThermostatChange = (modeName: string, controlName: string, field: keyof ThermostatConfig, value: any) => {
+        this.setState(prevState => {
+            const currentConfig = prevState.editedModes[modeName]?.[controlName];
+            const thermostatConfig: ThermostatConfig = isThermostatConfig(currentConfig) 
+                ? { ...currentConfig }
+                : createDefaultThermostatConfig(this.getSensorNames()[0] || 'dht22');
+            
+            // Update the specific field
+            (thermostatConfig as any)[field] = value;
+            
+            return {
+                editedModes: {
+                    ...prevState.editedModes,
+                    [modeName]: {
+                        ...prevState.editedModes[modeName],
+                        [controlName]: thermostatConfig
+                    }
+                },
+                hasChanges: true
+            };
+        });
+    };
+
+    getSensorNames(): string[] {
+        if (!this.props.config) return [];
+        return Object.keys(this.props.config.sensors);
+    }
 
     handleModeNameChange = (oldName: string, newName: string) => {
         if (newName === oldName) return;
@@ -125,10 +183,24 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
             counter++;
         }
         
-        // Create mode with all controls set to false
-        const newModeData: { [controlName: string]: boolean } = {};
+        // Create mode with controls matching the type of existing modes
+        // (preserve thermostat configs for controls that use them)
+        const newModeData: { [controlName: string]: ControlValue } = {};
+        const existingModeNames = Object.keys(this.state.editedModes);
+        const referenceMode = existingModeNames.length > 0 
+            ? this.state.editedModes[existingModeNames[0]] 
+            : null;
+        
         controlNames.forEach(control => {
-            newModeData[control] = false;
+            if (referenceMode && isThermostatConfig(referenceMode[control])) {
+                // Copy thermostat structure from reference mode but disabled
+                newModeData[control] = {
+                    ...referenceMode[control] as ThermostatConfig,
+                    enabled: false
+                };
+            } else {
+                newModeData[control] = false;
+            }
         });
         
         this.setState(prevState => ({
@@ -148,7 +220,6 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
         
         this.setState(prevState => {
             const { [modeName]: _, ...restModes } = prevState.editedModes;
-            const remainingModes = Object.keys(restModes);
             
             // Set periods using the deleted mode to empty (None) - they will do nothing
             const updatedPeriods = { ...prevState.editedPlanning.periods };
@@ -161,9 +232,9 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                 }
             });
             
-            // Default mode still needs a valid mode, use first remaining
+            // Set default mode to None if the deleted mode was the default
             const updatedDefaultMode = prevState.editedPlanning.default_mode === modeName
-                ? remainingModes[0] || ''
+                ? ''
                 : prevState.editedPlanning.default_mode;
             
             return {
@@ -300,6 +371,7 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
     renderModesTab() {
         const controlNames = this.getControlNames();
         const modeNames = this.getModeNames();
+        const sensorNames = this.getSensorNames();
         const canDelete = modeNames.length > 1;
 
         return (
@@ -307,7 +379,7 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                 <div className="section-header">
                     <div>
                         <h3>Modes Configuration</h3>
-                        <p className="settings-hint">Configure which controls are active in each mode.</p>
+                        <p className="settings-hint">Configure controls for each mode. Thermostats control relays based on temperature.</p>
                     </div>
                     <button 
                         className="btn btn-add" 
@@ -318,58 +390,125 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                     </button>
                 </div>
                 
-                <table className="settings-table">
-                    <thead>
-                        <tr>
-                            <th>Mode Name</th>
-                            {controlNames.map(control => (
-                                <th key={control}>{control}</th>
-                            ))}
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {modeNames.map(modeName => (
-                            <tr key={modeName}>
-                                <td>
-                                    <input
-                                        type="text"
-                                        className="mode-name-input"
-                                        defaultValue={modeName}
-                                        onBlur={(e) => this.handleModeNameChange(modeName, e.target.value.trim())}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                (e.target as HTMLInputElement).blur();
-                                            }
-                                        }}
-                                    />
-                                </td>
-                                {controlNames.map(controlName => (
-                                    <td key={controlName}>
-                                        <label className="toggle-switch">
-                                            <input
-                                                type="checkbox"
-                                                checked={this.state.editedModes[modeName]?.[controlName] || false}
-                                                onChange={(e) => this.handleModeControlChange(modeName, controlName, e.target.checked)}
-                                            />
-                                            <span className="toggle-slider"></span>
-                                        </label>
-                                    </td>
-                                ))}
-                                <td>
-                                    <button
-                                        className="btn-delete"
-                                        onClick={() => this.handleDeleteMode(modeName)}
-                                        title={canDelete ? "Delete mode" : "Cannot delete the last mode"}
-                                        disabled={!canDelete}
-                                    >
-                                        ×
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="modes-list">
+                    {modeNames.map(modeName => (
+                        <div key={modeName} className="mode-card">
+                            <div className="mode-card-header">
+                                <input
+                                    type="text"
+                                    className="mode-name-input"
+                                    defaultValue={modeName}
+                                    onBlur={(e) => this.handleModeNameChange(modeName, e.target.value.trim())}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            (e.target as HTMLInputElement).blur();
+                                        }
+                                    }}
+                                />
+                                <button
+                                    className="btn-delete"
+                                    onClick={() => this.handleDeleteMode(modeName)}
+                                    title={canDelete ? "Delete mode" : "Cannot delete the last mode"}
+                                    disabled={!canDelete}
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            <div className="mode-card-controls">
+                                {controlNames.map(controlName => {
+                                    const controlValue = this.state.editedModes[modeName]?.[controlName];
+                                    const isThermostat = isThermostatConfig(controlValue);
+                                    
+                                    return (
+                                        <div key={controlName} className="control-item">
+                                            <div className="control-header">
+                                                <span className="control-name">{controlName}</span>
+                                                {isThermostat && (
+                                                    <span className="control-type-badge">Thermostat</span>
+                                                )}
+                                            </div>
+                                            
+                                            {isThermostat ? (
+                                                <div className="thermostat-editor">
+                                                    <div className="thermostat-row">
+                                                        <label className="thermostat-toggle">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={controlValue.enabled}
+                                                                onChange={(e) => this.handleThermostatChange(modeName, controlName, 'enabled', e.target.checked)}
+                                                            />
+                                                            <span>Enabled</span>
+                                                        </label>
+                                                    </div>
+                                                    
+                                                    <div className="thermostat-row">
+                                                        <label>Target</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.5"
+                                                            value={controlValue.target_temperature}
+                                                            onChange={(e) => this.handleThermostatChange(modeName, controlName, 'target_temperature', parseFloat(e.target.value) || 0)}
+                                                            className="thermostat-input"
+                                                        />
+                                                        <span className="unit">°C</span>
+                                                    </div>
+                                                    
+                                                    <div className="thermostat-row">
+                                                        <label>Hysteresis</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            min="0"
+                                                            max="10"
+                                                            value={controlValue.hysteresis}
+                                                            onChange={(e) => this.handleThermostatChange(modeName, controlName, 'hysteresis', parseFloat(e.target.value) || 0)}
+                                                            className="thermostat-input"
+                                                        />
+                                                        <span className="unit">±°C</span>
+                                                    </div>
+                                                    
+                                                    <div className="thermostat-row">
+                                                        <label>Sensor</label>
+                                                        <select
+                                                            value={controlValue.sensor}
+                                                            onChange={(e) => this.handleThermostatChange(modeName, controlName, 'sensor', e.target.value)}
+                                                            className="thermostat-select"
+                                                        >
+                                                            {sensorNames.map(s => (
+                                                                <option key={s} value={s}>{s}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    
+                                                    <div className="thermostat-row">
+                                                        <label>Action</label>
+                                                        <select
+                                                            value={controlValue.action}
+                                                            onChange={(e) => this.handleThermostatChange(modeName, controlName, 'action', e.target.value as 'cooling' | 'heating')}
+                                                            className="thermostat-select"
+                                                        >
+                                                            <option value="cooling">Cooling</option>
+                                                            <option value="heating">Heating</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <label className="toggle-switch">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(controlValue)}
+                                                        onChange={(e) => this.handleModeControlChange(modeName, controlName, e.target.checked)}
+                                                    />
+                                                    <span className="toggle-slider"></span>
+                                                </label>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         );
     }
@@ -402,7 +541,9 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                         <select
                             value={this.state.editedPlanning.default_mode}
                             onChange={(e) => this.handleDefaultModeChange(e.target.value)}
+                            className={this.state.editedPlanning.default_mode === '' ? 'mode-none' : ''}
                         >
+                            <option value="" className="mode-none-option">(None)</option>
                             {modeNames.map(mode => (
                                 <option key={mode} value={mode}>{mode}</option>
                             ))}

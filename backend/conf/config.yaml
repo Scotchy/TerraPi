@@ -30,16 +30,43 @@ controls:
 
 # Mode definitions
 # Each mode defines the state of each control
+# Controls can be:
+#   - boolean: simple on/off (e.g., light: true)
+#   - thermostat: temperature-based control with the following fields:
+#       type: thermostat
+#       enabled: true/false
+#       target_temperature: float (degrees Celsius)
+#       hysteresis: float (± tolerance to prevent rapid cycling)
+#       sensor: sensor name from sensors section
+#       action: 'cooling' or 'heating'
 modes:
   day:
     light: true
-    cooling_system: false
+    cooling_system:
+      type: thermostat
+      enabled: true
+      target_temperature: 25.0
+      hysteresis: 1.0
+      sensor: dht22
+      action: cooling
   night:
     light: false
-    cooling_system: true
+    cooling_system:
+      type: thermostat
+      enabled: true
+      target_temperature: 22.0
+      hysteresis: 1.0
+      sensor: dht22
+      action: cooling
   "off":
     light: false
-    cooling_system: false
+    cooling_system:
+      type: thermostat
+      enabled: false
+      target_temperature: 25.0
+      hysteresis: 1.0
+      sensor: dht22
+      action: cooling
 
 # Planning/scheduling configuration
 planning:
