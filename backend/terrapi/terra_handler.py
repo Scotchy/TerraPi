@@ -93,7 +93,9 @@ class TerraHandler():
             full_config = self._config_manager.get_full_config(self._conf)
             # Add current runtime state
             full_config["planning"]["active"] = self._follow_planning
-            full_config["current_mode"] = self._current_mode
+            # Use current mode or calculate it if not yet set
+            current_mode = self._current_mode if self._current_mode else self.get_mode()
+            full_config["current_mode"] = current_mode
             config_json = json.dumps(full_config)
             print(f"Publishing config/full: {config_json[:200]}...")
             self._mqtt_client.publish("config/full", config_json)
@@ -130,6 +132,9 @@ class TerraHandler():
             for sensor_name, sensor in self._terrarium.sensors.items():
                 data[sensor_name] = sensor.get_data()
             
+            # Get the mode FIRST (before publishing)
+            self._current_mode = self.get_mode()
+
             # Send the data to mqtt
             if time.time() - self._last_log >= self._log_interval:
                 self._last_log = time.time()
@@ -142,9 +147,7 @@ class TerraHandler():
                 self._mqtt_client.publish("mode", self._current_mode)
                 print(f"mode: {self._current_mode}")
 
-            # Get the mode
-            self._current_mode = self.get_mode()
-
+            # Apply mode to controls
             mode_params = self._conf.modes[self._current_mode]
             target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.keys()}
             
