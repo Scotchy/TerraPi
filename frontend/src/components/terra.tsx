@@ -128,6 +128,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         this.client.subscribe("config/status");
 
         // Get current conf
+        console.log("Publishing config/get request...");
         this.client.publish("config/get", "1");
     }
 
@@ -142,7 +143,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
     }
 
     onMessageArrived = (message : any) => {
-        console.log("onMessageArrived:" + message.payloadString);
+        console.log("onMessageArrived: topic=" + message.destinationName + " payload=" + message.payloadString?.substring(0, 100));
         if (message.destinationName === "sensor/dht22/temperature") {
             this.setState({
                 temperature: message.payloadString
@@ -205,6 +206,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
 
     onSettingsOpen = () => {
         // Request fresh config before opening settings
+        console.log("Settings opened, publishing config/get...");
         this.client.publish("config/get", "1");
         this.setState({ settingsVisible: true });
     }
