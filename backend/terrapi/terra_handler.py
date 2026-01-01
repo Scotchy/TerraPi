@@ -97,24 +97,25 @@ class TerraHandler():
             import traceback
             traceback.print_exc()
 
+    def _on_mqtt_ready(self):
+        """Called when MQTT connection is ready and subscriptions are confirmed."""
+        print("[MQTT] Connection ready, publishing initial config...")
+        self._publish_full_config()
+
 
     def run(self):
 
-        # Subscribe to topics (message handler already set in __init__)
-        print("[MQTT] Subscribing to topics...")
+        # Queue topic subscriptions (will be subscribed when connection is ready)
+        print("[MQTT] Queueing topic subscriptions...")
         self._mqtt_client.subscribe("planning/active")
         self._mqtt_client.subscribe("mode/set")
         self._mqtt_client.subscribe("config/get")
         self._mqtt_client.subscribe("config/update")
-        print("[MQTT] Subscribed to: planning/active, mode/set, config/get, config/update")
         
-        # Small delay to ensure subscriptions are active
-        time.sleep(0.5)
-        
-        # Publish initial config on startup
-        self._publish_full_config()
+        # Set callback to publish initial config when connection is ready
+        self._mqtt_client.on_ready(self._on_mqtt_ready)
 
-        print("[MQTT] Entering main loop, listening for messages...")
+        print("[MQTT] Waiting for connection and entering main loop...")
         
         # Start the loop
         while True:
