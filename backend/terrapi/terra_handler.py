@@ -4,6 +4,7 @@ import RPi.GPIO as GPIO
 import terrapi.sensor as sensor
 from terrapi.terrarium import Terrarium
 from terrapi.config_manager import ConfigManager
+from terrapi.thermostat import Thermostat
 import time
 import json
 import os
@@ -27,6 +28,9 @@ class TerraHandler():
         self._loop_interval = 1  # Loop interval in seconds
         self._log_interval = conf.log_interval  # Log interval in seconds
         self._last_log = 0  # Last time the data was logged
+
+        # Thermostat instances (keyed by control_name) to maintain state between loops
+        self._thermostats = {}
 
         # Set message handler BEFORE connection (called from run.py after this)
         self._mqtt_client.on_message(self._handle_message)
@@ -153,15 +157,30 @@ class TerraHandler():
                 print(f"[MODE] mode: {self._current_mode}")
             # Apply mode to controls
             mode_params = self._conf.modes[self._current_mode]
-            target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.keys()}
             
-            # Debug: log mode and control states being applied
-            print(f"[CONTROL] Applying mode '{self._current_mode}' with states: {target_controls_states}")
+            # Debug: log mode being applied
+            print(f"[CONTROL] Applying mode '{self._current_mode}'")
 
             for control_name, control in self._terrarium.controls.items():
-                # Set the control state
-                control.switch(target_controls_states.get(control_name, False))
-                print(f"[CONTROL] Control '{control_name}' set to state: {target_controls_states.get(control_name, False)}")
+                mode_config = mode_params.get(control_name) if hasattr(mode_params, 'get') else getattr(mode_params, control_name, None)
+                
+                # Check if this is a thermostat config (has 'type' attribute set to 'thermostat')
+                is_thermostat = False
+                if mode_config is not None:
+                    if hasattr(mode_config, 'type'):
+                        is_thermostat = mode_config.type == 'thermostat'
+                    elif isinstance(mode_config, dict):
+                        is_thermostat = mode_config.get('type') == 'thermostat'
+                
+                if is_thermostat:
+                    # Handle thermostat control
+                    relay_state = self._apply_thermostat(control_name, mode_config, data)
+                    control.switch(relay_state)
+                else:
+                    # Simple boolean control (backwards compatible)
+                    state = bool(mode_config) if mode_config is not None else False
+                    control.switch(state)
+                    print(f"[CONTROL] Control '{control_name}' set to state: {state}")
             
             # Sleep for 1 second
             time.sleep(1)
@@ -214,3 +233,69 @@ class TerraHandler():
             # Remain unchanged
             print(f"[MODE] Planning inactive, keeping current mode '{self._current_mode}'")
             return self._current_mode
+
+    def _apply_thermostat(self, control_name: str, config, sensor_data: dict) -> bool:
+        """
+        Apply thermostat logic to determine relay state.
+        
+        Args:
+            control_name: Name of the control (e.g., 'cooling_system')
+            config: Thermostat configuration (Config object or dict)
+            sensor_data: Dict of sensor readings {sensor_name: {data_name: value}}
+            
+        Returns:
+            True if relay should be ON, False if OFF
+        """
+        # Extract config values (handle both Config object and dict)
+        def get_val(key, default=None):
+            if hasattr(config, key):
+                return getattr(config, key)
+            elif isinstance(config, dict):
+                return config.get(key, default)
+            return default
+        
+        enabled = get_val('enabled', False)
+        if not enabled:
+            print(f"[THERMOSTAT] {control_name}: disabled, relay OFF")
+            return False
+        
+        target_temp = float(get_val('target_temperature', 25.0))
+        hysteresis = float(get_val('hysteresis', 1.0))
+        sensor_name = get_val('sensor', 'dht22')
+        action = get_val('action', 'cooling')
+        
+        # Get temperature from referenced sensor
+        sensor_readings = sensor_data.get(sensor_name, {})
+        current_temp = sensor_readings.get('temperature') if sensor_readings else None
+        
+        if current_temp is None:
+            print(f"[THERMOSTAT] {control_name}: No temperature from sensor '{sensor_name}', keeping current state")
+            # Keep current state if we have a thermostat instance, otherwise OFF
+            if control_name in self._thermostats:
+                return self._thermostats[control_name].relay_state
+            return False
+        
+        # Get or create thermostat instance for this control
+        # Key includes mode to reset state when mode changes
+        thermostat_key = f"{control_name}_{self._current_mode}"
+        
+        if thermostat_key not in self._thermostats:
+            self._thermostats[thermostat_key] = Thermostat(
+                target_temp=target_temp,
+                hysteresis=hysteresis,
+                action=action
+            )
+        else:
+            # Update thermostat settings in case they changed
+            thermostat = self._thermostats[thermostat_key]
+            thermostat.target_temp = target_temp
+            thermostat.hysteresis = hysteresis
+            thermostat.action = action
+        
+        thermostat = self._thermostats[thermostat_key]
+        relay_state = thermostat.compute_state(float(current_temp))
+        
+        print(f"[THERMOSTAT] {control_name}: temp={current_temp}°C, target={target_temp}°C (±{hysteresis}), "
+              f"action={action}, relay={'ON' if relay_state else 'OFF'}")
+        
+        return relay_state
