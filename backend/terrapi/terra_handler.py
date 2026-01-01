@@ -152,8 +152,7 @@ class TerraHandler():
             target_controls_states = {control_name: mode_params[control_name] for control_name in mode_params.keys()}
             
             # Debug: log mode and control states being applied
-            if time.time() - self._last_log < 2:  # Log with sensor data
-                print(f"[CONTROL] Applying mode '{self._current_mode}' with states: {target_controls_states}")
+            print(f"[CONTROL] Applying mode '{self._current_mode}' with states: {target_controls_states}")
 
             for control_name, control in self._terrarium.controls.items():
                 # Set the control state
