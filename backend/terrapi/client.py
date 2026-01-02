@@ -1,20 +1,31 @@
 import paho.mqtt.client as mqtt
+import ssl
 
 class Client():
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, use_ssl=False, ca_certs=None):
         self.host = host
         self.port = port
+        self.use_ssl = use_ssl
+        self.ca_certs = ca_certs
         self.client = None
 
 
 class MosquittoClient(Client):
 
-    def __init__(self, host, port):
-        super().__init__(host, port)
+    def __init__(self, host, port, use_ssl=False, ca_certs=None):
+        super().__init__(host, port, use_ssl, ca_certs)
         self.client = mqtt.Client()
         self._on_ready_callback = None
         self._subscriptions = []
+        
+        # Configure TLS if enabled
+        if use_ssl:
+            if ca_certs:
+                self.client.tls_set(ca_certs=ca_certs, tls_version=ssl.PROTOCOL_TLS)
+            else:
+                # Use system CA certificates
+                self.client.tls_set(tls_version=ssl.PROTOCOL_TLS)
         
         # Debug callbacks
         def on_subscribe(client, userdata, mid, granted_qos):
