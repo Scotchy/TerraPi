@@ -36,8 +36,10 @@ def run_robust(conf):
             # Create the terrarium
             terrarium = tp.terrarium.Terrarium(config)
 
-            # Create MQTT client (don't connect yet)
-            client = tp.client.MosquittoClient(config.mqtt.host, config.mqtt.port)
+            # Create MQTT client with SSL options
+            use_ssl = getattr(config.mqtt, 'use_ssl', False)
+            ca_certs = getattr(config.mqtt, 'ca_certs', None)
+            client = tp.client.MosquittoClient(config.mqtt.host, config.mqtt.port, use_ssl, ca_certs)
 
             # Create TerraHandler (sets up message handler)
             terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config, conf)

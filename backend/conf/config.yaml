@@ -2,10 +2,12 @@
 # All settings in one file
 
 mqtt:
-  host: plantescarnivores.net
-  port: 1883
+  host: site300.ovh
+  port: 8883
   user: ${MQTT_USER}
   password: ${MQTT_PASSWORD}
+  use_ssl: true
+  # ca_certs: /path/to/ca.pem  # Optional: specify custom CA, otherwise uses system CAs
 
 log_interval: 5
 
