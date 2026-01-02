@@ -1,4 +1,4 @@
-import * as mqtt from 'react-paho-mqtt';
+import Paho from 'paho-mqtt';
 
 import React from 'react';
 import { Control } from './control';
@@ -72,6 +72,13 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         this.client = null;
     }
 
+    // Helper method to publish messages using Paho API
+    publish(topic: string, payload: string) {
+        const message = new Paho.Message(payload);
+        message.destinationName = topic;
+        this.client.send(message);
+    }
+
     connect(username: string | null = null, password: string | null = null) {
         if (this.client !== null && this.client.isConnected()) {
             this.client.disconnect();
@@ -99,13 +106,16 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         // Generate unique client ID to avoid conflicts
         const clientId = "front_" + Math.random().toString(16).substring(2, 10);
         
-        this.client = mqtt.connect(
-            "plantescarnivores.net", 
-            9001, 
-            clientId, 
-            this.onConnectionLost, 
-            this.onMessageArrived
-        );
+        // Use secure WebSocket (wss://) via nginx reverse proxy
+        const isSecure = window.location.protocol === 'https:';
+        const host = "site300.ovh";
+        const port = 9001;
+        const path = "/mosquitto";
+        
+        // Use Paho.Client directly for path support
+        this.client = new Paho.Client(host, port, clientId);
+        this.client.onConnectionLost = this.onConnectionLost;
+        this.client.onMessageArrived = this.onMessageArrived;
 
         const options = {
             userName: username,
@@ -113,7 +123,8 @@ export class Terra extends React.Component<TerraProps, TerraState> {
             onSuccess: this.onConnect,
             onFailure: this.onAuthFailure,
             reconnect: false,
-            keepAliveInterval: 30
+            keepAliveInterval: 30,
+            useSSL: true
         };
 
         this.client.connect(options);
@@ -164,7 +175,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
 
         // Get current conf
         console.log("Publishing config/get request...");
-        this.client.publish("config/get", "1");
+        this.publish("config/get", "1");
     }
 
     componentWillUnmount() {
@@ -233,21 +244,21 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         this.setState({
             planning_active: event.target.checked
         });
-        this.client.publish("planning/active", event.target.checked ? "1" : "0");
-        this.client.publish("config/get", "1");
+        this.publish("planning/active", event.target.checked ? "1" : "0");
+        this.publish("config/get", "1");
     }
 
     onModeChange = (event : any) => {
         this.setState({
             current_mode: event.target.value
         });
-        this.client.publish("mode/set", event.target.value);
+        this.publish("mode/set", event.target.value);
     }
 
     onSettingsOpen = () => {
         // Request fresh config before opening settings
         console.log("Settings opened, publishing config/get...");
-        this.client.publish("config/get", "1");
+        this.publish("config/get", "1");
         this.setState({ settingsVisible: true });
     }
 
@@ -257,7 +268,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
 
     onSettingsSave = (section: string, data: any) => {
         const update = JSON.stringify({ section, data });
-        this.client.publish("config/update", update);
+        this.publish("config/update", update);
     }
 
     onToastClose = () => {
@@ -360,7 +371,6 @@ export class Terra extends React.Component<TerraProps, TerraState> {
                             <div className="dropdown">
                                 <label>Mode</label>
                                 <select value={this.state.current_mode} onChange={this.onModeChange} disabled={this.state.planning_active || this.state.planning_active === undefined || this.state.modes.length === 0}>
-                                    {this.state.current_mode === "None" && <option value="None" key="None">None</option>}
                                     {this.state.modes.map((mode) => <option value={mode} key={mode}>{mode}</option>)}
                                 </select>
                             </div>
