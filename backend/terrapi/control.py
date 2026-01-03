@@ -6,6 +6,9 @@ class Control():
         self._pin = pin
         self._state = False
 
+    def get_state(self):
+        return self._state
+    
     def switch_on(self):
         pass
 
