@@ -199,9 +199,9 @@ class TerraHandler():
 
             # Publish control states
             for control_name, control in self._terrarium.controls.items():
-                state = control.get_state()
-                self._mqtt_client.publish(f"control/{control_name}/state", str(state))
-                print(f"[CONTROL] control/{control_name}/state: {str(state)}")
+                states = { control_name : control.get_state() for control_name, control in self._terrarium.controls.items() }
+                self._mqtt_client.publish(f"control/state", json.dumps(states))
+                print(f"[CONTROL] control/state: {json.dumps(states)}")
             
             # Sleep for 1 second
             time.sleep(1)
