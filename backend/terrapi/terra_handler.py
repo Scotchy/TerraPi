@@ -158,41 +158,50 @@ class TerraHandler():
             
             # Handle 'None' mode - skip control application
             if self._current_mode is None or self._current_mode == "None":
-                print(f"[CONTROL] Mode is None, skipping control application")
-                time.sleep(1)
-                continue
+                print(f"[CONTROL] Mode is None, swipping all controls OFF")
+                for control_name, control in self._terrarium.controls.items():
+                    control.switch(False)
+                    print(f"[CONTROL] Control '{control_name}' set to state: False")
             
-            # Apply mode to controls
-            mode_params = self._conf.modes.get(self._current_mode) if hasattr(self._conf.modes, 'get') else getattr(self._conf.modes, self._current_mode, None)
-            
-            if mode_params is None:
-                print(f"[CONTROL] Unknown mode '{self._current_mode}', skipping control application")
-                time.sleep(1)
-                continue
-            
-            # Debug: log mode being applied
-            print(f"[CONTROL] Applying mode '{self._current_mode}'")
+            else:
+                # Apply mode to controls
+                mode_params = self._conf.modes.get(self._current_mode) if hasattr(self._conf.modes, 'get') else getattr(self._conf.modes, self._current_mode, None)
+                
+                if mode_params is None:
+                    print(f"[CONTROL] Unknown mode '{self._current_mode}', skipping control application")
+                    time.sleep(1)
+                    continue
+                
+                # Debug: log mode being applied
+                print(f"[CONTROL] Applying mode '{self._current_mode}'")
 
+                for control_name, control in self._terrarium.controls.items():
+                    mode_config = mode_params.get(control_name) if hasattr(mode_params, 'get') else getattr(mode_params, control_name, None)
+                    
+                    # Check if this is a thermostat config (has 'type' attribute set to 'thermostat')
+                    is_thermostat = False
+                    if mode_config is not None:
+                        if hasattr(mode_config, 'type'):
+                            is_thermostat = mode_config.type == 'thermostat'
+                        elif isinstance(mode_config, dict):
+                            is_thermostat = mode_config.get('type') == 'thermostat'
+                    
+                    if is_thermostat:
+                        # Handle thermostat control
+                        relay_state = self._apply_thermostat(control_name, mode_config, data)
+                        control.switch(relay_state)
+                    else:
+                        # Simple boolean control (backwards compatible)
+                        state = bool(mode_config) if mode_config is not None else False
+                        control.switch(state)
+                        print(f"[CONTROL] Control '{control_name}' set to state: {state}")
+                
+
+            # Publish control states
             for control_name, control in self._terrarium.controls.items():
-                mode_config = mode_params.get(control_name) if hasattr(mode_params, 'get') else getattr(mode_params, control_name, None)
-                
-                # Check if this is a thermostat config (has 'type' attribute set to 'thermostat')
-                is_thermostat = False
-                if mode_config is not None:
-                    if hasattr(mode_config, 'type'):
-                        is_thermostat = mode_config.type == 'thermostat'
-                    elif isinstance(mode_config, dict):
-                        is_thermostat = mode_config.get('type') == 'thermostat'
-                
-                if is_thermostat:
-                    # Handle thermostat control
-                    relay_state = self._apply_thermostat(control_name, mode_config, data)
-                    control.switch(relay_state)
-                else:
-                    # Simple boolean control (backwards compatible)
-                    state = bool(mode_config) if mode_config is not None else False
-                    control.switch(state)
-                    print(f"[CONTROL] Control '{control_name}' set to state: {state}")
+                state = control.get_state()
+                self._mqtt_client.publish(f"control/{control_name}/state", str(state))
+                print(f"[CONTROL] control/{control_name}/state: {str(state)}")
             
             # Sleep for 1 second
             time.sleep(1)

@@ -112,7 +112,7 @@ def instantiate_sensors(sensors_config: Dict[str, Any]) -> Dict[str, Any]:
     return sensors
 
 
-def instantiate_controls(controls_config: Dict[str, Any]) -> Dict[str, Any]:
+def instantiate_controls(controls_config: Dict[str, Any]) -> Dict[str, control_module.Control]:
     """
     Create control instances from config.
     
