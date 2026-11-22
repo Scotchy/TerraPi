@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import importlib.util
 import io
@@ -23,6 +24,34 @@ def load(name, path):
 
 updater = load("updater", BASE / "pi/updater.py")
 dispatch = load("dispatch", BASE / "ci/dispatch.py")
+vps = load("vps", BASE / "vps/apply.py")
+
+
+class VPSDeployment(unittest.TestCase):
+    def test_registry_auth_is_private_and_discarded_after_a_failed_pull(self):
+        job = {"component": "frontend", "registry": {"username": "runner", "token": "fixture"}}
+        config_files = []
+
+        def fail_pull(_job):
+            config = Path(os.environ["DOCKER_CONFIG"]) / "config.json"
+            config_files.append(config)
+            self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+            auth = json.loads(config.read_bytes())["auths"]
+            self.assertEqual(list(auth), ["ghcr.io"])
+            self.assertEqual(base64.b64decode(auth["ghcr.io"]["auth"]), b"runner:fixture")
+            raise RuntimeError("simulated pull failure")
+
+        self.addCleanup(os.umask, os.umask(0o077))
+        with tempfile.TemporaryDirectory() as root, patch.dict(os.environ), \
+             patch.object(vps, "ROOT", Path(root)), patch.object(vps.sys, "stdin") as stdin, \
+             patch.object(vps.subprocess, "run") as network, patch.object(vps, "docker") as docker, \
+             patch.object(vps, "frontend", side_effect=fail_pull):
+            stdin.buffer = io.BytesIO(json.dumps(job).encode())
+            network.return_value.returncode = 0
+            with self.assertRaisesRegex(RuntimeError, "simulated pull failure"):
+                vps.main()
+            docker.assert_not_called()
+        self.assertFalse(config_files[0].parent.exists())
 
 
 class PiDeployment(unittest.TestCase):
