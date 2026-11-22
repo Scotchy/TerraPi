@@ -1,0 +1,88 @@
+import hashlib
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import subprocess
+import tarfile
+import tempfile
+import time
+import unittest
+from unittest.mock import patch
+
+BASE = Path(__file__).resolve().parents[1]
+
+
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+updater = load("updater", BASE / "pi/updater.py")
+dispatch = load("dispatch", BASE / "ci/dispatch.py")
+
+
+class PiDeployment(unittest.TestCase):
+    def test_signed_bundle_and_encrypted_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            key, cert, pub = (work / name for name in ("test.key", "test.pem", "test.pub"))
+            subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                            "-subj", "/CN=fixture", "-keyout", key, "-out", cert], check=True,
+                           stderr=subprocess.DEVNULL)
+            subprocess.run(["openssl", "pkey", "-in", key, "-pubout", "-out", pub], check=True)
+            subprocess.run(["bash", BASE / "ci/package.sh", work], cwd=BASE.parent, check=True)
+            bundle = (work / "controller.tgz").read_bytes()
+            with patch.dict(os.environ, RELEASE_SIGNING_KEY=key.read_text(), PI_RECIPIENT_CERT=cert.read_text(),
+                            PI_SETTINGS='{"password":"synthetic-only"}'):
+                files = dispatch.controller_files(work, bundle, 7, "0" * 40)
+            with patch.object(updater.platform, "machine", return_value="armv7l"):
+                manifest = updater.verify(files["envelope"], pub)
+            self.assertEqual(manifest["bundle"], hashlib.sha256(bundle).hexdigest())
+            self.assertNotIn("synthetic-only", json.dumps(files))
+            encrypted = updater.base64.b64decode(files["settings"])
+            clear = updater.run("openssl", "cms", "-decrypt", "-binary", "-inform", "DER",
+                                "-inkey", key, "-recip", cert, data=encrypted)
+            self.assertEqual(json.loads(clear)["password"], "synthetic-only")
+            with self.assertRaises(subprocess.CalledProcessError):
+                updater.verify(dict(files["envelope"], body="e30="), pub)
+            dest = work / "extracted"
+            dest.mkdir()
+            updater.unpack(bundle, dest)
+            self.assertTrue((dest / "run.py").is_file())
+            self.assertFalse((dest / "conf").exists())
+
+    def test_bundle_rejects_unexpected_member(self):
+        raw = io.BytesIO()
+        with tarfile.open(fileobj=raw, mode="w:gz") as archive:
+            archive.addfile(tarfile.TarInfo("config.yaml"), io.BytesIO())
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaises(ValueError):
+            updater.unpack(raw.getvalue(), Path(tmp))
+
+    def test_rollout_retries_and_recovers_after_power_loss(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            releases = root / "releases"
+            rollback = releases / "0"
+            rollback.mkdir(parents=True)
+            (root / "current").symlink_to(rollback)
+            desired = {"sequence": 1, "expires": time.time() + 60}
+            with patch.object(updater, "ROOT", root), patch.object(updater, "fetch", return_value=b"{}"), \
+                 patch.object(updater, "verify", return_value=desired), patch.object(updater, "run") as run, \
+                 patch.object(updater, "prepare", side_effect=lambda a, b, path: path.mkdir()) as prepare:
+                config = {"origin": "https://example.invalid"}
+                self.assertEqual(updater.reconcile(config, lambda _: False)["result"], "failed")
+                self.assertEqual((root / "current").resolve(), rollback)
+                updater.reconcile(config, lambda _: True)
+                self.assertEqual(prepare.call_count, 1)
+                desired["sequence"] = 2
+                self.assertEqual(updater.reconcile(config, lambda _: True)["result"], "healthy")
+                self.assertEqual((root / "current").resolve(), releases / "2")
+                record = updater.save(3, "activating", previous=str(releases / "2"))
+                updater.select(rollback)
+                updater.recover(record)
+                self.assertEqual((root / "current").resolve(), releases / "2")
+                run.assert_called_with("systemctl", "restart", updater.SERVICE)

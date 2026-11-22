@@ -1,0 +1,34 @@
+# Synthetic role names. Substitute the real MQTT identities in the private ACL secret.
+user dashboard
+topic read sensor/#
+topic read mode
+topic read conf
+topic read controls/state
+topic read config/full
+topic read config/status
+topic write config/get
+topic write config/update
+topic write planning/active
+topic write mode/set
+
+user controller
+topic write sensor/#
+topic write controls/state
+topic write mode
+topic write conf
+topic write config/full
+topic write config/status
+topic read config/get
+topic read config/update
+topic read planning/active
+topic read mode/set
+topic write terrapi/deploy/controller/health
+
+user updater
+topic read terrapi/deploy/controller/health
+topic read terrapi/deploy/controller/wake
+topic write terrapi/deploy/controller/status
+
+user release-publisher
+topic write terrapi/deploy/controller/wake
+topic read terrapi/deploy/controller/status

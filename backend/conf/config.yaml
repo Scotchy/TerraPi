@@ -2,8 +2,8 @@
 # All settings in one file
 
 mqtt:
-  host: site300.ovh
-  port: 8883
+  host: ${MQTT_HOST}
+  port: 1883
   user: ${MQTT_USER}
   password: ${MQTT_PASSWORD}
   use_ssl: true

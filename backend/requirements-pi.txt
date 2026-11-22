@@ -1,0 +1,6 @@
+click==7.1.2
+PyYAML==6.0
+Adafruit-Blinka==8.18.1
+adafruit-circuitpython-dht==3.7.8
+RPi.GPIO==0.7.0
+paho-mqtt==1.6.1

@@ -1,0 +1,15 @@
+name: terrapi
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE:?required}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT:?required}:8080"
+    volumes:
+      - ./public:/srv/releases:ro
+      - ./previous:/srv/previous:ro
+    networks: [app]
+networks:
+  app:
+    name: terrapi-app
+    external: true

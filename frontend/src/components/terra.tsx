@@ -106,14 +106,11 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         // Generate unique client ID to avoid conflicts
         const clientId = "front_" + Math.random().toString(16).substring(2, 10);
         
-        // Use secure WebSocket (wss://) via nginx reverse proxy
-        const isSecure = window.location.protocol === 'https:';
-        const host = "site300.ovh";
-        const port = 9001;
-        const path = "/mosquitto";
-        
-        // Use Paho.Client directly for path support
-        this.client = new Paho.Client(host, port, clientId);
+        const endpoint = new URL('/terra/mqtt', window.location.href);
+        endpoint.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const devEndpoint = process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEV_MQTT_URL;
+        const broker = devEndpoint ? new URL(devEndpoint) : endpoint;
+        this.client = new Paho.Client(broker.href, clientId);
         this.client.onConnectionLost = this.onConnectionLost;
         this.client.onMessageArrived = this.onMessageArrived;
 
@@ -122,9 +119,9 @@ export class Terra extends React.Component<TerraProps, TerraState> {
             password: password,
             onSuccess: this.onConnect,
             onFailure: this.onAuthFailure,
-            reconnect: false,
+            reconnect: true,
             keepAliveInterval: 30,
-            useSSL: true
+            useSSL: broker.protocol === 'wss:'
         };
 
         this.client.connect(options);
@@ -156,6 +153,12 @@ export class Terra extends React.Component<TerraProps, TerraState> {
     }
 
     componentDidMount() {
+        if (process.env.NODE_ENV === 'production' && window.location.protocol === 'http:') {
+            const secure = new URL(window.location.href);
+            secure.protocol = 'https:';
+            window.location.replace(secure.href);
+            return;
+        }
         // Try to connect with stored credentials
         this.connect();
     }
@@ -179,7 +182,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
     }
 
     componentWillUnmount() {
-        this.client.disconnect();
+        if (this.client?.isConnected()) this.client.disconnect();
     }
 
     onConnectionLost = (responseObject : any) => {

@@ -2,8 +2,8 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('prompts for MQTT login before connecting', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Sign In' })).toBeDisabled();
+  expect(screen.getByPlaceholderText('Username')).toBeInTheDocument();
 });

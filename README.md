@@ -31,11 +31,12 @@ TerraPi/
 cd backend
 
 # Set MQTT credentials
+export MQTT_HOST=broker.example.invalid
 export MQTT_USER=your_username
 export MQTT_PASSWORD=your_password
 
 # Run the service
-python run.py --conf conf/main.yaml
+python run.py --conf conf/config.yaml
 ```
 
 **Requirements:** Raspberry Pi with GPIO access, Python 3.7+, MQTT broker
@@ -48,19 +49,17 @@ npm install
 npm start
 ```
 
-Opens at http://localhost:3000
+Opens at http://localhost:3000. For local development, set `REACT_APP_DEV_MQTT_URL` to a WebSocket URL for your development broker. The browser can read this URL. Supply credentials through the login screen.
 
 ## Configuration
 
-Edit `backend/conf/main.yaml` to configure:
+Edit `backend/conf/config.yaml` to configure:
 - MQTT broker connection
 - Sensor pins (DHT22)
 - Control pins (relays)
 - Logging interval
 
-Edit `backend/conf/modes.yaml` for environmental profiles.
-
-Edit `backend/conf/planning.yaml` for scheduling.
+The same file contains the mode profiles and schedule.
 
 ## Architecture
 
@@ -71,6 +70,10 @@ RPi GPIO Sensors → TerraHandler → MQTT Broker ↔ React Frontend
 ```
 
 Communication uses MQTT topics for sensor data, control states, and configuration sync.
+
+## Deployment
+
+See the [CI/CD and production setup guide](deploy/README.md) for Docker deployment, private GitHub Environment Secrets, Raspberry Pi releases and rollback.
 
 ## License
 
