@@ -195,8 +195,11 @@ def main():
             docker("network", "create", "terrapi-app")
         with tempfile.TemporaryDirectory() as registry:
             os.environ["DOCKER_CONFIG"] = registry
-            docker("login", "ghcr.io", "-u", job["registry"]["username"], "--password-stdin",
-                   data=job["registry"]["token"].encode())
+            # A headless SSH session cannot unlock the host's desktop credential store.
+            credentials = job["registry"]
+            auth = base64.b64encode((credentials["username"] + ":" + credentials["token"]).encode())
+            atomic(Path(registry) / "config.json",
+                   json.dumps({"auths": {"ghcr.io": {"auth": auth.decode("ascii")}}}).encode())
             if job["component"] in ("controller", "broker"):
                 docker("pull", image(job["release"]["notifier"], "notifier"))
             {"controller": controller, "broker": broker, "frontend": frontend}[job["component"]](job)
