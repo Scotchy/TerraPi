@@ -21,8 +21,7 @@ class Relay(Control):
     def __init__(self, pin):
         super().__init__(pin)
 
-        GPIO.setup(self._pin, GPIO.OUT)
-        self.switch_off()
+        GPIO.setup(self._pin, GPIO.OUT, initial=GPIO.HIGH)
 
     def switch_on(self):
         GPIO.output(self._pin, GPIO.LOW)

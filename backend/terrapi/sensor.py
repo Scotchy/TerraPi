@@ -6,8 +6,11 @@ class Sensor():
     def __init__(self, pin):
         self._pin = pin
 
-    def get_data(self):
+    def close(self):
         pass
+
+    def get_data(self):
+        raise NotImplementedError
 
 
 class DHT22(Sensor):
@@ -30,3 +33,6 @@ class DHT22(Sensor):
         except RuntimeError as error:
             print(error.args[0])
             return None
+
+    def close(self):
+        self.dht_device.exit()

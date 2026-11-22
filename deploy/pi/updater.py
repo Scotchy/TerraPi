@@ -26,14 +26,29 @@ KEYS = Path("/etc/terrapi")
 SERVICE = "terrapi-controller.service"
 TOPIC = "terrapi/deploy/controller"
 LIMIT = 4 * 1024 * 1024
+MAX_PREPARATIONS = 3
+MIN_FREE_BYTES = 64 * 1024 * 1024
+
+
+def sync_directory(path):
+    fd = os.open(path, os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def atomic(path, data):
-    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as tmp:
-        tmp.write(data)
-        tmp.flush()
-        os.fsync(tmp.fileno())
-    os.replace(tmp.name, path)
+    tmp = tempfile.NamedTemporaryFile(dir=path.parent, delete=False)
+    try:
+        with tmp:
+            tmp.write(data)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        os.replace(tmp.name, path)
+        sync_directory(path.parent)
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
 
 
 def run(*args, data=None, timeout=60):
@@ -97,23 +112,16 @@ def unpack(raw, target):
 def prepare(origin, manifest, release):
     raw = artifact(origin, manifest["bundle"])
     encrypted = artifact(origin, manifest["settings"])
-    settings = json.loads(run("openssl", "cms", "-decrypt", "-binary", "-inform", "DER",
-                              "-recip", KEYS / "recipient.pem", "-inkey", KEYS / "recipient.key", data=encrypted))
-    # Test new credentials and trust chain before interrupting the running process.
-    ready = threading.Event()
-    probe = mqtt.Client()
-    probe.tls_set_context(ssl.create_default_context())
-    probe.username_pw_set(settings["username"], settings["password"])
-    probe.on_connect = lambda client, _, flags, rc: ready.set() if rc == 0 else None
-    probe.connect(settings["host"], int(settings["port"]))
-    probe.loop_start()
     try:
-        if not ready.wait(10):
-            raise RuntimeError("Candidate credentials failed")
-    finally:
-        probe.disconnect()
-        probe.loop_stop()
-
+        clear = run("openssl", "cms", "-decrypt", "-binary", "-inform", "DER",
+                    "-recip", KEYS / "recipient.pem", "-inkey", KEYS / "recipient.key", data=encrypted)
+    except subprocess.CalledProcessError as error:
+        raise ValueError("Invalid encrypted settings") from error
+    settings = json.loads(clear)
+    if not isinstance(settings, dict):
+        raise ValueError("Invalid controller settings")
+    if shutil.disk_usage(release.parent).free < MIN_FREE_BYTES:
+        raise OSError("Insufficient staging space")
     release.mkdir()
     unpack(raw, release)
     prepare_environment(release)
@@ -125,6 +133,20 @@ def prepare(origin, manifest, release):
             continue
         os.chown(path, 0, gid)
         path.chmod(0o750 if path.is_dir() or path.stat().st_mode & 0o100 else 0o640)
+    check_candidate(release)
+    # Flush the staged tree and its directory entry before journaling activation.
+    run("sync", "-f", release)
+
+
+def check_candidate(release):
+    helper = Path(__file__).with_name("check_candidate.py")
+    try:
+        run("/usr/sbin/runuser", "-u", "terrapi", "--", release / "venv/bin/python3", "-I",
+            helper, release, ROOT / "config/config.yaml", timeout=30)
+    except subprocess.CalledProcessError as error:
+        if error.returncode == 75:
+            raise OSError("Broker temporarily unavailable") from error
+        raise ValueError("Candidate configuration or credentials failed preflight") from error
 
 
 def prepare_environment(release):
@@ -156,6 +178,7 @@ def select(release):
     link.unlink(missing_ok=True)
     link.symlink_to(release)
     os.replace(link, ROOT / "current")
+    sync_directory(ROOT)
 
 
 def state():
@@ -182,8 +205,11 @@ def reconcile(config, observe):
     origin = config["origin"]
     manifest = verify(json.loads(fetch(origin, "desired.json", 16384)), KEYS / "signing.pub")
     sequence = manifest["sequence"]
-    if sequence <= record["sequence"] or time.time() >= manifest["expires"]:
+    retrying = sequence == record["sequence"] and record["result"] == "retrying"
+    if sequence <= record["sequence"] and not retrying:
         return record
+    if time.time() >= manifest["expires"]:
+        return save(sequence, "failed", reason="expired")
     release = ROOT / "releases" / str(sequence)
     # Only an interrupted preparation can leave this uncommitted directory.
     if release.exists():
@@ -191,12 +217,17 @@ def reconcile(config, observe):
     previous = (ROOT / "current").resolve(strict=True)
     try:
         prepare(origin, manifest, release)
-    except Exception:
-        # The old service is still active. Connectivity and disk errors can be retried.
+    except (ValueError, tarfile.TarError, EOFError) as error:
         shutil.rmtree(release, ignore_errors=True)
-        raise
+        return save(sequence, "failed", reason=type(error).__name__)
+    except (OSError, subprocess.SubprocessError) as error:
+        shutil.rmtree(release, ignore_errors=True)
+        attempts = record["attempts"] + 1 if retrying else 1
+        result = "failed" if attempts >= MAX_PREPARATIONS else "retrying"
+        return save(sequence, result, attempts=attempts, reason=type(error).__name__)
     if time.time() >= manifest["expires"]:
-        return record
+        shutil.rmtree(release)
+        return save(sequence, "failed", reason="expired")
     record = save(sequence, "activating", previous=str(previous))
     try:
         select(release)
@@ -249,9 +280,10 @@ def main():
         wake.clear()
         try:
             record = reconcile(config, observe)
-            client.publish(TOPIC + "/status", json.dumps(record), qos=1, retain=True)
         except Exception as error:
             print("Reconciliation deferred:", type(error).__name__, flush=True)
+            record = state()
+        client.publish(TOPIC + "/status", json.dumps(record), qos=1, retain=True)
 
 
 if __name__ == "__main__":
