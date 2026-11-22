@@ -11,9 +11,6 @@ interface ControlState {
 
 export class Control extends React.Component<ControlProps, ControlState> {
 
-    constructor(props : ControlProps) {
-        super(props);
-    }
 
     render() {
         return (

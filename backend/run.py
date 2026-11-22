@@ -39,13 +39,19 @@ def run_robust(conf):
             # Create MQTT client with SSL options
             use_ssl = getattr(config.mqtt, 'use_ssl', False)
             ca_certs = getattr(config.mqtt, 'ca_certs', None)
-            client = tp.client.MosquittoClient(config.mqtt.host, config.mqtt.port, use_ssl, ca_certs)
+            host, port = config.mqtt.host, config.mqtt.port
+            user, password = config.mqtt.user, config.mqtt.password
+            if os.environ.get("TERRAPI_MANAGED_TLS") == "1":
+                host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
+                user, password = os.environ["MQTT_USER"], os.environ["MQTT_PASSWORD"]
+                use_ssl = True
+            client = tp.client.MosquittoClient(host, port, use_ssl, ca_certs)
 
             # Create TerraHandler (sets up message handler)
             terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config, conf)
 
             # Now connect (after message handler is set)
-            client.connect(config.mqtt.user, config.mqtt.password)
+            client.connect(user, password)
 
             # run 
             terra_handler.run()

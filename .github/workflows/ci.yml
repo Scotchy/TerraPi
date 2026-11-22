@@ -1,0 +1,82 @@
+name: Build and test
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Scan release sources for credentials
+        run: |
+          mkdir "$RUNNER_TEMP/scan"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/scan"
+          docker run --rm -v "$RUNNER_TEMP/scan:/scan:ro" \
+            zricethezav/gitleaks@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055 \
+            dir /scan --no-banner --redact --log-level error
+      - name: Run controller and deployment checks
+        run: |
+          python3 -m venv "$RUNNER_TEMP/check"
+          "$RUNNER_TEMP/check/bin/pip" install paho-mqtt==1.6.1 PyYAML
+          "$RUNNER_TEMP/check/bin/python" -m unittest discover -s deploy/tests -v
+          python3 -m compileall -q backend deploy
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Test React and the production build
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test -- --watchAll=false --runInBand
+          GENERATE_SOURCEMAP=false npm run build
+      - name: Exercise the containers on an isolated Docker network
+        run: |
+          docker build -t terrapi-ci/frontend:test frontend
+          docker build -t terrapi-ci/notifier:test deploy/vps
+          bash deploy/tests/containers.sh
+      - name: Export the tested images
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: docker save terrapi-ci/frontend:test terrapi-ci/notifier:test | gzip > "$RUNNER_TEMP/tested-images.tgz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          name: tested-images
+          path: ${{ runner.temp }}/tested-images.tgz
+          retention-days: 1
+          overwrite: true
+
+  package:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Download the tested images
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: tested-images
+          path: ${{ runner.temp }}
+      - name: Publish tested images and controller bundle
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: bash deploy/ci/release.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: terrapi-release
+          path: dist/release/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true

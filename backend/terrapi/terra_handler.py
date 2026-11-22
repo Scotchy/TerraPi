@@ -7,6 +7,7 @@ from terrapi.config_manager import ConfigManager
 from terrapi.thermostat import Thermostat
 import time
 import json
+import math
 import os
 from datetime import datetime
 
@@ -142,7 +143,8 @@ class TerraHandler():
             print(f"[MODE] Current mode determined: {self._current_mode}")
 
             # Send the data to mqtt
-            if time.time() - self._last_log >= self._log_interval:
+            reporting = time.time() - self._last_log >= self._log_interval
+            if reporting:
                 self._last_log = time.time()
                 for sensor_name, sensor_data in data.items():
                     if sensor_data is None:
@@ -203,6 +205,15 @@ class TerraHandler():
                 self._mqtt_client.publish(f"controls/state", json.dumps(states))
                 print(f"[CONTROL] controls/state: {json.dumps(states)}")
             
+            # Confirm this release completed a control cycle with fresh sensor data.
+            deployment = os.environ.get("TERRAPI_DEPLOYMENT")
+            if deployment and reporting:
+                temperatures = [values.get("temperature") for values in data.values() if values]
+                valid_temperature = any(isinstance(t, (float, int)) and math.isfinite(t) for t in temperatures)
+                valid_mode = self._current_mode in self._conf.modes.keys()
+                if valid_temperature and valid_mode and self._terrarium.controls:
+                    self._mqtt_client.publish("terrapi/deploy/controller/health", deployment)
+
             # Sleep for 1 second
             time.sleep(1)
 

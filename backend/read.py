@@ -6,8 +6,9 @@ import paho.mqtt.client as mqtt
 client = mqtt.Client()
 
 # Connect to the broker
+client.tls_set()
 client.username_pw_set(os.environ["MQTT_USER"], os.environ["MQTT_PASSWORD"])
-client.connect("plantescarnivores.net", 1883)
+client.connect(os.environ["MQTT_HOST"], int(os.environ.get("MQTT_PORT", "1883")))
 
 # Subscribe to topics
 client.subscribe("planning/active")

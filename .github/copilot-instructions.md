@@ -100,7 +100,7 @@ npm install     # First time only
 npm start       # Dev server on http://localhost:3000
 npm run build   # Production build
 ```
-Hardcoded MQTT broker: `plantescarnivores.net:9001` (see `frontend/src/components/terra.tsx`)
+The browser connects to the same-origin MQTT WebSocket route at `/terra/mqtt`.
 
 ### Configuration
 - Sensors/controls defined in `config.yaml` with `type` (class name) and `pin` (GPIO pin)
@@ -130,6 +130,6 @@ Hardcoded MQTT broker: `plantescarnivores.net:9001` (see `frontend/src/component
 
 ## Important Context
 - MQTT credentials stored in browser cookies (username/password prompt on first load)
-- Frontend hostname hardcoded (`plantescarnivores.net`)—for local development, modify connection URL in `terra.tsx`
+The browser connects to the same-origin MQTT WebSocket route at `/terra/mqtt`.
 - Environment variables for MQTT credentials: `MQTT_USER`, `MQTT_PASSWORD`
 - No test files present; manual testing or integration tests recommended before deployment

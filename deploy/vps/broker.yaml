@@ -1,0 +1,25 @@
+name: terrapi
+services:
+  broker:
+    image: ${BROKER_IMAGE:?required}
+    restart: unless-stopped
+    ports:
+      - "${NATIVE_PORT:?required}:1883"
+      - "${WS_PORT:?required}:9001"
+    volumes:
+      - ${BROKER_CONFIG_DIR:?required}/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${BROKER_CONFIG_DIR:?required}:/run/broker:ro
+      - data:/mosquitto/data
+      - logs:/mosquitto/log
+    networks: [app]
+volumes:
+  data:
+    external: true
+    name: ${DATA_VOLUME:?required}
+  logs:
+    external: true
+    name: ${LOG_VOLUME:?required}
+networks:
+  app:
+    name: terrapi-app
+    external: true
