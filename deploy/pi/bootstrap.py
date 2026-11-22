@@ -74,6 +74,7 @@ def main():
         release = Path(staging) / "baseline"
         release.mkdir(mode=0o750)
         os.chown(release, 0, user.pw_gid)
+        release.chmod(0o750)
         install(args.backend / "run.py", release / "run.py", 0o640, user.pw_gid)
         package = release / "terrapi"
         package.mkdir()
