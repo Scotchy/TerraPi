@@ -5,11 +5,13 @@ import terrapi.sensor as sensor
 from terrapi.terrarium import Terrarium
 from terrapi.config_manager import ConfigManager
 from terrapi.thermostat import Thermostat
+from terrapi.monitoring import ACK_TOPIC, Monitor
 import time
 import json
 import math
 import os
 from datetime import datetime
+from pathlib import Path
 
 class TerraHandler():
 
@@ -18,6 +20,7 @@ class TerraHandler():
         self._mqtt_client = mqtt_client
         self._conf = conf
         self._config_path = config_path
+        self._monitor = Monitor(Path(config_path).with_name("monitor-outbox.sqlite3"), mqtt_client)
 
         # Initialize ConfigManager for runtime config updates
         self._config_manager = ConfigManager(config_path)
@@ -35,6 +38,10 @@ class TerraHandler():
 
         # Set message handler BEFORE connection (called from run.py after this)
         self._mqtt_client.on_message(self._handle_message)
+        for topic in ("planning/active", "mode/set", "config/get", "config/update"):
+            self._mqtt_client.subscribe(topic)
+        self._mqtt_client.subscribe(ACK_TOPIC, qos=1)
+        self._mqtt_client.on_ready(self._on_mqtt_ready)
 
 
     def _handle_message(self, client, userdata, message):
@@ -46,6 +53,9 @@ class TerraHandler():
 
         # Get the topic and the message
         topic = message.topic
+        if topic == ACK_TOPIC:
+            self._monitor.acknowledge(message.payload.decode("ascii", errors="replace"))
+            return
         payload = message.payload.decode("utf-8")
         
         print(f"[MQTT] Received message on topic: {topic}")
@@ -115,19 +125,11 @@ class TerraHandler():
         self._publish_full_config()
 
 
+    def close(self):
+        self._monitor.close()
+
     def run(self):
-
-        # Queue topic subscriptions (will be subscribed when connection is ready)
-        print("[MQTT] Queueing topic subscriptions...")
-        self._mqtt_client.subscribe("planning/active")
-        self._mqtt_client.subscribe("mode/set")
-        self._mqtt_client.subscribe("config/get")
-        self._mqtt_client.subscribe("config/update")
-        
-        # Set callback to publish initial config when connection is ready
-        self._mqtt_client.on_ready(self._on_mqtt_ready)
-
-        print("[MQTT] Waiting for connection and entering main loop...")
+        print("[CONTROL] Starting control and monitoring loop...")
         
         # Start the loop
         while True:
@@ -139,8 +141,9 @@ class TerraHandler():
                 print(f"[SENSOR] Collected sensor data: {data}")
             
             # Get the mode FIRST (before publishing)
-            self._current_mode = self.get_mode()
-            print(f"[MODE] Current mode determined: {self._current_mode}")
+            mode = self.get_mode()
+            self._current_mode = mode
+            print(f"[MODE] Current mode determined: {mode}")
 
             # Send the data to mqtt
             reporting = time.time() - self._last_log >= self._log_interval
@@ -155,11 +158,11 @@ class TerraHandler():
                         print(f"[SENSOR] sensor/{sensor_name}/{data_name}: {str(data_value)}")
 
                 # Send current mode
-                self._mqtt_client.publish("mode", self._current_mode if self._current_mode else "None")
-                print(f"[MODE] mode: {self._current_mode}")
+                self._mqtt_client.publish("mode", mode if mode else "None")
+                print(f"[MODE] mode: {mode}")
             
             # Handle 'None' mode - skip control application
-            if self._current_mode is None or self._current_mode == "None":
+            if mode is None or mode == "None":
                 print(f"[CONTROL] Mode is None, swipping all controls OFF")
                 for control_name, control in self._terrarium.controls.items():
                     control.switch(False)
@@ -167,15 +170,16 @@ class TerraHandler():
             
             else:
                 # Apply mode to controls
-                mode_params = self._conf.modes.get(self._current_mode) if hasattr(self._conf.modes, 'get') else getattr(self._conf.modes, self._current_mode, None)
+                mode_params = self._conf.modes.get(mode) if hasattr(self._conf.modes, 'get') else getattr(self._conf.modes, mode, None)
                 
                 if mode_params is None:
-                    print(f"[CONTROL] Unknown mode '{self._current_mode}', skipping control application")
+                    print(f"[CONTROL] Unknown mode '{mode}', skipping control application")
+                    self._monitor.update(data, self._control_states(), None)
                     time.sleep(1)
                     continue
                 
                 # Debug: log mode being applied
-                print(f"[CONTROL] Applying mode '{self._current_mode}'")
+                print(f"[CONTROL] Applying mode '{mode}'")
 
                 for control_name, control in self._terrarium.controls.items():
                     mode_config = mode_params.get(control_name) if hasattr(mode_params, 'get') else getattr(mode_params, control_name, None)
@@ -200,23 +204,27 @@ class TerraHandler():
                 
 
             # Publish control states
-            for control_name, control in self._terrarium.controls.items():
-                states = { control_name : control.get_state() for control_name, control in self._terrarium.controls.items() }
+            states = self._control_states()
+            if states:
                 self._mqtt_client.publish(f"controls/state", json.dumps(states))
                 print(f"[CONTROL] controls/state: {json.dumps(states)}")
+            power = bool(mode) and str(mode).lower() not in ("off", "none")
+            self._monitor.update(data, states, power)
             
             # Confirm this release completed a control cycle with fresh sensor data.
             deployment = os.environ.get("TERRAPI_DEPLOYMENT")
             if deployment and reporting:
                 temperatures = [values.get("temperature") for values in data.values() if values]
                 valid_temperature = any(isinstance(t, (float, int)) and math.isfinite(t) for t in temperatures)
-                valid_mode = self._current_mode in self._conf.modes.keys()
+                valid_mode = mode in self._conf.modes.keys()
                 if valid_temperature and valid_mode and self._terrarium.controls:
                     self._mqtt_client.publish("terrapi/deploy/controller/health", deployment)
 
             # Sleep for 1 second
             time.sleep(1)
 
+    def _control_states(self):
+        return {name: control.get_state() for name, control in self._terrarium.controls.items()}
 
     def get_mode(self):
         # Set mode according to the planning if needed

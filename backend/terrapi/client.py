@@ -1,5 +1,6 @@
 import paho.mqtt.client as mqtt
 import ssl
+from threading import Event
 
 class Client():
 
@@ -16,6 +17,8 @@ class MosquittoClient(Client):
     def __init__(self, host, port, use_ssl=False, ca_certs=None):
         super().__init__(host, port, use_ssl, ca_certs)
         self.client = mqtt.Client()
+        self.client.max_queued_messages_set(8)
+        self._connected = Event()
         self._on_ready_callback = None
         self._subscriptions = []
         
@@ -35,9 +38,10 @@ class MosquittoClient(Client):
             print(f"[MQTT] Connected to broker (rc={rc})")
             if rc == 0:
                 # Subscribe to queued topics now that we're connected
-                for topic in self._subscriptions:
+                for topic, qos in self._subscriptions:
                     print(f"[MQTT] Subscribing to: {topic}")
-                    client.subscribe(topic)
+                    client.subscribe(topic, qos=qos)
+                self._connected.set()
                 # Call ready callback if set
                 if self._on_ready_callback:
                     self._on_ready_callback()
@@ -46,6 +50,10 @@ class MosquittoClient(Client):
         
         self.client.on_subscribe = on_subscribe
         self.client.on_connect = on_connect
+        self.client.on_disconnect = lambda client, userdata, rc: self._connected.clear()
+
+    def is_connected(self):
+        return self._connected.is_set()
 
     def on_message(self, callback):
         """Set the message callback. Must be called BEFORE connect()."""
@@ -57,19 +65,20 @@ class MosquittoClient(Client):
 
     def connect(self, username, password):
         self.client.username_pw_set(username, password)
-        self.client.connect(self.host, self.port)
+        # Start sampling and controlling the terrarium even if the broker is down at boot.
+        self.client.connect_async(self.host, self.port, keepalive=20)
         self.client.loop_start()  # Start background thread to process messages
 
     def send_message(self, topic, message):
         self.client.publish(topic, message)
         
     def disconnect(self):
-        self.client.loop_stop()  # Stop background thread
         self.client.disconnect()
+        self.client.loop_stop()
 
-    def subscribe(self, topic):
+    def subscribe(self, topic, qos=0):
         """Queue subscription - will be executed when connected."""
-        self._subscriptions.append(topic)
+        self._subscriptions.append((topic, qos))
 
-    def publish(self, topic, message):
-        self.client.publish(topic, message)
+    def publish(self, topic, message, qos=0):
+        return self.client.publish(topic, message, qos=qos)

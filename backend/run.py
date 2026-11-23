@@ -54,7 +54,10 @@ def run_robust(conf):
             client.connect(user, password)
 
             # run 
-            terra_handler.run()
+            try:
+                terra_handler.run()
+            finally:
+                terra_handler.close()
         
         except KeyboardInterrupt:
             print("Exiting")

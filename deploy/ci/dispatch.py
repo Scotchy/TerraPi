@@ -22,6 +22,24 @@ def encode(data):
     return base64.b64encode(data).decode("ascii")
 
 
+def monitoring_settings(settings, password_file):
+    config = {key: settings[key] for key in ("mqtt_user", "mqtt_password", "dashboard_user")}
+    if not all(isinstance(value, str) and value for value in config.values()):
+        raise ValueError("Incomplete monitoring configuration")
+    if config["mqtt_user"] == config["dashboard_user"]:
+        raise ValueError("Collector and dashboard require separate identities")
+    hashes = [digest for user, separator, digest in (line.partition(":") for line in password_file.splitlines())
+              if separator and user == config["dashboard_user"]]
+    if len(hashes) != 1 or not hashes[0].startswith("$7$"):
+        raise ValueError("Expected one Mosquitto PBKDF2 hash for the selected dashboard user")
+    if "history_days" in settings:
+        days = settings["history_days"]
+        if type(days) is not int or not 1 <= days <= 1825:
+            raise ValueError("history_days must be between 1 and 1825")
+        config["history_days"] = days
+    return dict(config, dashboard_hash=hashes[0])
+
+
 def controller_files(work, bundle, sequence, revision):
     key = work / "signing.pem"
     key.write_text(required("RELEASE_SIGNING_KEY"))
@@ -61,8 +79,11 @@ def main():
         if component == "frontend":
             package["web_port"] = int(required("WEB_PORT"))
             package["dashboard_url"] = os.environ.get("DASHBOARD_URL", "")
-        else:
+        elif component in ("broker", "controller"):
             package["monitor"] = json.loads(required("BROKER_MONITOR"))
+        elif component == "monitoring":
+            package["settings"] = monitoring_settings(json.loads(required("MONITORING_SETTINGS")),
+                                                      required("BROKER_PASSWORD_FILE"))
         if component == "broker":
             package["volumes"] = json.loads(required("BROKER_VOLUMES"))
             package["files"] = {filename: required(secret) for filename, secret in {

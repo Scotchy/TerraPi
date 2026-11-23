@@ -23,6 +23,12 @@ topic read config/update
 topic read planning/active
 topic read mode/set
 topic write terrapi/deploy/controller/health
+topic write terrapi/monitor/samples
+topic read terrapi/monitor/ack
+
+user monitoring
+topic read terrapi/monitor/samples
+topic write terrapi/monitor/ack
 
 user updater
 topic read terrapi/deploy/controller/health

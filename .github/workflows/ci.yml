@@ -24,10 +24,13 @@ jobs:
             dir /scan --no-banner --redact --log-level error
       - name: Run controller and deployment checks
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mosquitto
           python3 -m venv "$RUNNER_TEMP/check"
           "$RUNNER_TEMP/check/bin/pip" install paho-mqtt==1.6.1 PyYAML
           "$RUNNER_TEMP/check/bin/python" -m unittest discover -s deploy/tests -v
-          python3 -m compileall -q backend deploy
+          "$RUNNER_TEMP/check/bin/python" -m unittest discover -s monitoring/tests -v
+          python3 -m compileall -q backend deploy monitoring
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
@@ -41,10 +44,11 @@ jobs:
         run: |
           docker build -t terrapi-ci/frontend:test frontend
           docker build -t terrapi-ci/notifier:test deploy/vps
+          docker build -t terrapi-ci/monitoring:test monitoring
           bash deploy/tests/containers.sh
       - name: Export the tested images
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: docker save terrapi-ci/frontend:test terrapi-ci/notifier:test | gzip > "$RUNNER_TEMP/tested-images.tgz"
+        run: docker save terrapi-ci/frontend:test terrapi-ci/notifier:test terrapi-ci/monitoring:test | gzip > "$RUNNER_TEMP/tested-images.tgz"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:

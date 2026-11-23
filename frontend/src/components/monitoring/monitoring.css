@@ -1,0 +1,110 @@
+.monitor-page {
+    --mon-ink: #173d32;
+    --mon-muted: #52665c;
+    --mon-border: #d9dfd6;
+    --mon-accent: #28664f;
+    box-sizing: border-box;
+    background: #f3f5f0;
+    color: var(--mon-ink);
+    min-height: 100%;
+    width: 100%;
+    text-align: left;
+    font-family: "Segoe UI", Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+}
+.monitor-page *, .monitor-page *::before, .monitor-page *::after { box-sizing: border-box; }
+.monitor-page button, .monitor-page input { font: inherit; }
+.monitor-page button { cursor: pointer; }
+.monitor-page button:disabled { cursor: default; }
+.monitor-page :focus-visible { outline: 3px solid #b27428; outline-offset: 3px; }
+.mon-topbar { background: #163d33; color: #f0f5ee; }
+.mon-topbar-content, .mon-content { width: min(100% - 64px, 1280px); margin: 0 auto; }
+.mon-topbar-content { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mon-brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 660; font-size: 20px; letter-spacing: -.045em; }
+.mon-brand-icon { display: inline-grid; place-items: center; width: 34px; height: 34px; background: #d3e7bf; color: #224a38; border-radius: 9px; }
+.mon-back { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: 1px solid #69877a; border-radius: 7px; color: #f8faf6; padding: 6px 12px; font-weight: 550 !important; }
+.mon-back:hover { background: #2a5044; }
+.mon-content { padding: 36px 0 40px; }
+.mon-page-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; }
+.mon-page-head h1 { font-family: "Baskervville", Georgia, "Times New Roman", serif; margin: 0; font-size: clamp(32px, 3.3vw, 48px); letter-spacing: -.048em; line-height: 1.15; font-weight: 500; }
+.mon-page-head h1:focus { outline: none; }
+.mon-range-label { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; color: var(--mon-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.mon-range-label svg { flex-shrink: 0; }
+.mon-zone { white-space: nowrap; }
+.mon-follow { display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #315243; border: 1px solid var(--mon-border); background: white; border-radius: 20px; padding: 6px 12px; white-space: nowrap; font-size: 13px !important; font-weight: 600 !important; }
+.mon-follow:hover { border-color: #849d8d; }
+.mon-switch { width: 26px; height: 16px; border-radius: 8px; padding: 3px; display: flex; align-items: center; background: #778780; }
+.mon-switch span { display: block; width: 10px; height: 10px; border-radius: 50%; background: white; }
+.mon-follow[aria-pressed="true"] .mon-switch { justify-content: flex-end; background: var(--mon-accent); }
+.mon-toolbar { border: 1px solid var(--mon-border); border-radius: 12px; background: white; margin: 0 0 16px; }
+.mon-toolbar-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 18px; padding: 10px 14px; }
+.mon-periods, .mon-navigation { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+.mon-period-label { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; color: var(--mon-muted); font-weight: 600; font-size: 13px; }
+.mon-periods button, .mon-navigation button { border: 0; background: transparent; color: #466053; line-height: 1.2; min-height: 32px; border-radius: 7px; padding: 5px 11px; font-weight: 600; font-size: 13px; }
+.mon-periods button:hover, .mon-navigation button:not(:disabled):hover { background: #eef3ec; color: var(--mon-ink); }
+.mon-periods button[aria-pressed="true"], .mon-periods button.mon-custom-active { background: #244e3f; color: white; }
+.mon-navigation button { padding: 5px; display: inline-grid; place-items: center; width: 32px; }
+.mon-navigation button:disabled { color: #aeb8b0; }
+.mon-tool-divider { width: 1px; height: 18px; margin: 0 4px; background: var(--mon-border); }
+.mon-custom { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 14px; border-top: 1px solid var(--mon-border); }
+.mon-custom label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--mon-muted); }
+.mon-custom input { background: white; border: 1px solid #a9b6a9; padding: 7px 9px; border-radius: 6px; color: var(--mon-ink); }
+.mon-form-actions { display: flex; gap: 6px; }
+.mon-primary, .mon-plain { border-radius: 6px; padding: 6px 12px; border: 1px solid #bdcabe; background: white; color: var(--mon-ink); font-weight: 550 !important; }
+.mon-primary { background: var(--mon-accent); border-color: var(--mon-accent); color: white; }
+.mon-plain:hover { background: #f0f4ee; }
+.mon-field-error { flex-basis: 100%; color: #9e322d; }
+.mon-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+.mon-metric, .mon-runtime { background: white; border: 1px solid var(--mon-border); border-radius: 14px; }
+.mon-metric { padding: 16px 18px 15px; }
+.mon-metric-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.mon-metric h2 { font-size: 13px; font-weight: 600; color: #40594d; line-height: 1.3; margin: 0; }
+.mon-metric-icon { flex-shrink: 0; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: #47735b; background: #eaf1e7; }
+.mon-metric-temperature .mon-metric-icon { background: #f9ede3; color: #a34e27; }
+.mon-metric-humidity .mon-metric-icon { background: #e6f1f3; color: #286b77; }
+.mon-metric-archive .mon-metric-icon { background: #efedf5; color: #6e637f; }
+.mon-metric-value { font-size: clamp(28px, 2.6vw, 38px); line-height: 1.25; font-variant-numeric: tabular-nums; letter-spacing: -.045em; font-weight: 600; margin: 7px 0 3px; }
+.mon-metric-value span { margin-left: 3px; font-size: .58em; font-weight: 500; color: var(--mon-muted); }
+.mon-metric p { color: var(--mon-muted); font-size: 12px; margin: 0; }
+.mon-runtime { margin-top: 18px; padding: 20px 24px 12px; }
+.mon-runtime h2 { font-size: 19px; letter-spacing: -.035em; margin: 0 0 12px; }
+.mon-runtime-note { margin: -4px 0 12px; font-size: 13px; color: var(--mon-muted); }
+.mon-table-scroll { overflow-x: auto; }
+.mon-runtime table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+.mon-runtime td, .mon-runtime th { text-align: right; padding: 10px 8px; white-space: nowrap; }
+.mon-runtime th:first-child { text-align: left; padding-left: 0; }
+.mon-runtime tr > :last-child { padding-right: 0; }
+.mon-runtime thead th { font-size: 12px; font-weight: 550; color: var(--mon-muted); }
+.mon-runtime tbody th { font-weight: 600; }
+.mon-runtime tbody tr { border-top: 1px solid #e6eae3; }
+.mon-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; margin: 15px 2px 0; color: var(--mon-muted); font-size: 12px; }
+.mon-foot strong { font-weight: 550; margin-left: 4px; }
+.mon-notice { display: flex; align-items: center; gap: 10px; padding: 12px 15px; border-radius: 9px; background: #e5eee2; color: #35573f; margin: 0 0 16px; }
+.mon-error { background: #fbede7; color: #8a3f2b; }
+.mon-error svg { flex-shrink: 0; }
+.mon-error .mon-plain { margin-left: auto; }
+.mon-loader { width: 16px; height: 16px; flex-shrink: 0; border-radius: 50%; border: 2px solid #afc3b2; border-top-color: var(--mon-accent); animation: mon-spin 1s linear infinite; }
+@keyframes mon-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mon-loader { animation: none; } }
+@media (max-width: 900px) {
+    .mon-content, .mon-topbar-content { width: calc(100% - 36px); }
+    .mon-metric { padding: 13px; }
+    .mon-metric-icon { width: 25px; height: 25px; }
+}
+@media (max-width: 700px) {
+    .mon-content { padding-top: 24px; }
+    .mon-page-head { align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    .mon-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .mon-toolbar-row { padding: 8px; gap: 6px; }
+    .mon-period-label { margin-right: 2px; }
+    .mon-periods { gap: 2px; }
+    .mon-periods button { padding: 5px 7px; }
+    .mon-runtime { padding: 16px; }
+}
+@media (max-width: 480px) {
+    .mon-content, .mon-topbar-content { width: calc(100% - 24px); }
+    .mon-topbar-content { min-height: 54px; }
+    .mon-custom label, .mon-custom input { width: 100%; min-width: 0; }
+    .mon-error { flex-wrap: wrap; }
+}

@@ -5,6 +5,7 @@ import { Control } from './control';
 import { SettingsModal } from './SettingsModal';
 import { Toast } from './Toast';
 import { LoginModal } from './LoginModal';
+import Monitoring from './monitoring/Monitoring';
 import './settings.css';
 
 interface TerraProps {
@@ -25,6 +26,7 @@ interface FullConfig {
 }
 
 interface TerraState {
+    monitoringVisible: boolean,
     temperature: string,
     humidity: string,
     planning_active: boolean | undefined,
@@ -47,10 +49,13 @@ interface TerraState {
 export class Terra extends React.Component<TerraProps, TerraState> {
     
     client: any;
+    private historyAuthorization = '';
+    private monitoringButton = React.createRef<HTMLButtonElement>();
 
     constructor(props : TerraProps) {
         super(props);
         this.state = {
+            monitoringVisible: window.location.hash === '#monitoring',
             temperature: "-",
             humidity: "-",
             planning_active: undefined,
@@ -103,6 +108,14 @@ export class Terra extends React.Component<TerraProps, TerraState> {
             return;
         }
 
+        const bytes = new TextEncoder().encode(username + ':' + password);
+        this.historyAuthorization = 'Basic ' + btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''));
+        if (window.location.hash === '#monitoring') {
+            // A bookmarked history view authenticates with the recorder even during a broker outage.
+            this.setState({ showLogin: false });
+            return;
+        }
+
         // Generate unique client ID to avoid conflicts
         const clientId = "front_" + Math.random().toString(16).substring(2, 10);
         
@@ -141,6 +154,13 @@ export class Terra extends React.Component<TerraProps, TerraState> {
 
     onAuthFailure = (responseObject: any) => {
         console.log("Authentication failed:", responseObject);
+        this.promptLogin('Invalid username or password');
+    }
+
+    historyLoginDenied = () => this.promptLogin('Sign in with the dashboard account to view history.');
+
+    promptLogin = (loginError: string) => {
+        this.historyAuthorization = '';
         // Clear stored credentials on auth failure
         document.cookie = "username=; path=/; max-age=0";
         document.cookie = "password=; path=/; max-age=0";
@@ -148,11 +168,13 @@ export class Terra extends React.Component<TerraProps, TerraState> {
         this.setState({ 
             showLogin: true, 
             isAuthenticated: false,
-            loginError: 'Invalid username or password'
+            loginError
         });
     }
 
     componentDidMount() {
+        window.addEventListener('popstate', this.syncView);
+        window.addEventListener('hashchange', this.syncView);
         if (process.env.NODE_ENV === 'production' && window.location.protocol === 'http:') {
             const secure = new URL(window.location.href);
             secure.protocol = 'https:';
@@ -182,7 +204,37 @@ export class Terra extends React.Component<TerraProps, TerraState> {
     }
 
     componentWillUnmount() {
+        window.removeEventListener('popstate', this.syncView);
+        window.removeEventListener('hashchange', this.syncView);
         if (this.client?.isConnected()) this.client.disconnect();
+    }
+
+    syncView = () => {
+        const monitoringVisible = window.location.hash === '#monitoring';
+        if (monitoringVisible === this.state.monitoringVisible) return;
+        this.setState(state => ({
+            monitoringVisible,
+            showLogin: state.showLogin || (!monitoringVisible && !state.isAuthenticated)
+        }), () => {
+            if (!monitoringVisible) {
+                if (!this.state.isAuthenticated) this.connect();
+                this.monitoringButton.current?.focus();
+            }
+        });
+    }
+
+    openMonitoring = () => {
+        window.history.pushState({ terraView: 'monitoring' }, '', '#monitoring');
+        this.syncView();
+    }
+
+    closeMonitoring = () => {
+        if (window.history.state?.terraView === 'monitoring') {
+            window.history.back();
+        } else {
+            window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+            this.syncView();
+        }
     }
 
     onConnectionLost = (responseObject : any) => {
@@ -281,6 +333,7 @@ export class Terra extends React.Component<TerraProps, TerraState> {
     }
 
     onDisconnect = () => {
+        this.historyAuthorization = '';
         // Clear stored credentials
         document.cookie = "username=; path=/; max-age=0";
         document.cookie = "password=; path=/; max-age=0";
@@ -300,8 +353,21 @@ export class Terra extends React.Component<TerraProps, TerraState> {
     }
 
     render() {
+        if (this.state.monitoringVisible && !this.state.showLogin && this.historyAuthorization) {
+            return <Monitoring authorization={this.historyAuthorization} onBack={this.closeMonitoring}
+                onUnauthorized={this.state.isAuthenticated ? undefined : this.historyLoginDenied} />;
+        }
         return (
             <div id="terra" className="flex-container">
+
+                {this.state.isAuthenticated && (
+                    <button className="monitoring-button" onClick={this.openMonitoring} ref={this.monitoringButton}>
+                        <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2 3v14h16M5 12l4-5 3 3 5-6" />
+                        </svg>
+                        Monitoring
+                    </button>
+                )}
 
                 {/* Settings Button */}
                 <button className="settings-button" onClick={this.onSettingsOpen} title="Settings">

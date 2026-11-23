@@ -150,6 +150,29 @@ def broker(job):
     activate("broker", cfg, lambda: monitor(job, "check"))
 
 
+def monitoring(job):
+    ref = image(job["release"]["monitoring"], "monitoring")
+    docker("pull", ref)
+    # Keep the previous settings path available to activate() during rollback.
+    with tempfile.NamedTemporaryFile(prefix="monitoring-settings-", dir=ROOT, delete=False) as settings:
+        settings.write(json.dumps(job["settings"]).encode())
+        os.fchown(settings.fileno(), 0, 65534)
+        os.fchmod(settings.fileno(), 0o440)
+    cfg = {"MONITORING_IMAGE": ref, "MONITORING_SETTINGS_FILE": settings.name}
+
+    def check():
+        docker("compose", "--project-directory", ROOT, "-f", TOOLS / "monitoring.yaml",
+               "exec", "-T", "monitoring", "python", "-c",
+               "from urllib.request import urlopen; urlopen('http://127.0.0.1:8081/health', timeout=3).close()",
+               env=dict(os.environ, **cfg))
+
+    activate("monitoring", cfg, check)
+    # A rollback recreates settings from the release's environment secrets.
+    for previous in ROOT.glob("monitoring-settings-*"):
+        if previous.is_file() and str(previous) != settings.name:
+            previous.unlink()
+
+
 def controller(job):
     public = ROOT / "public"
     envelope = job["envelope"]
@@ -202,7 +225,8 @@ def main():
                    json.dumps({"auths": {"ghcr.io": {"auth": auth.decode("ascii")}}}).encode())
             if job["component"] in ("controller", "broker"):
                 docker("pull", image(job["release"]["notifier"], "notifier"))
-            {"controller": controller, "broker": broker, "frontend": frontend}[job["component"]](job)
+            {"controller": controller, "broker": broker, "frontend": frontend,
+             "monitoring": monitoring}[job["component"]](job)
 
 
 if __name__ == "__main__":
