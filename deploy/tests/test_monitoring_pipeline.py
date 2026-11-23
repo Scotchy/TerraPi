@@ -110,7 +110,7 @@ class MonitoringPipeline(unittest.TestCase):
 
     def test_restart_and_replay_preserve_connection_and_equipment_history(self):
         recorder = self.start_recorder()
-        client = MosquittoClient("127.0.0.1", self.native)
+        client = MosquittoClient(dict(host="127.0.0.1", port=self.native, user="controller", password=self.password))
         queue = self.directory / "pi.db"
         device = monitoring.Monitor(queue, client)
         self.addCleanup(lambda: device.close())
@@ -126,9 +126,7 @@ class MonitoringPipeline(unittest.TestCase):
         cycle(0, 21, 54, True, True, False)  # Offline; leave the next minute unobserved.
         device.close()
         device = monitoring.Monitor(queue, client)
-        client.subscribe(monitoring.ACK_TOPIC, qos=1)
-        client.on_message(lambda _c, _u, msg: device.acknowledge(msg.payload.decode()))
-        client.connect("controller", self.password)
+        client.start(lambda _c, _u, msg: device.acknowledge(msg.payload.decode()), lambda: None)
         self.addCleanup(client.disconnect)
         self.wait_for(client.is_connected, "the controller's connection")
         cycle(2, 23, 58, False, False, False)

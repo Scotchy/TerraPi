@@ -15,8 +15,8 @@ client.subscribe("planning/active")
 client.subscribe("mode/set")
 
 # Subscribe to sensors
-client.subscribe("sensors/dht22/temperature")
-client.subscribe("sensors/dh22/humidity")
+client.subscribe("sensor/+/temperature")
+client.subscribe("sensor/+/humidity")
 
 # Print the message when a message is received
 def on_message(client, userdata, message):

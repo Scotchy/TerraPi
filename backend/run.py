@@ -1,80 +1,47 @@
-import terrapi as tp
-from terrapi.config_loader import load_config
-import click
+import argparse
+from contextlib import ExitStack
+import logging
+import signal
 import time
-import os
-import board
-import adafruit_dht
+
 import RPi.GPIO as GPIO
 
-GPIO.setmode(GPIO.BCM)
-
-follow_planning = True 
-current_mode = None
-devices_pins = {} 
-
-
-@click.command()
-@click.option('--conf', help='Path to config file', default='conf/config.yaml')
-def run(conf):
-    run_robust(conf)
+from terrapi.client import MosquittoClient
+from terrapi.config_loader import connection_settings, load_config
+from terrapi.terra_handler import TerraHandler
+from terrapi.terrarium import Terrarium
 
 
-def run_robust(conf):
+def run_once(path):
+    config = load_config(path)
+    with ExitStack() as resources:
+        GPIO.setmode(GPIO.BCM)
+        resources.callback(GPIO.cleanup)
+        terra = Terrarium(config, resources)
+        client = MosquittoClient(connection_settings(config))
+        handler = TerraHandler(terra, client, config, path)
+        resources.callback(handler.monitor.close)
+        resources.callback(client.disconnect)
+        client.start(handler.on_message, handler.publish_config)
+        handler.run()
 
-    client = None 
 
+def run():
+    parser = argparse.ArgumentParser(description="Run the TerraPi controller")
+    parser.add_argument("--conf", default="conf/config.yaml", help="Path to live configuration")
+    args = parser.parse_args()
+
+    def stop(signum, frame):
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, stop)
     while True:
         try:
-            global follow_planning
-            global current_mode
-            global devices_pins
-
-            # Load config file
-            config = load_config(conf)
-
-            # Create the terrarium
-            terrarium = tp.terrarium.Terrarium(config)
-
-            # Create MQTT client with SSL options
-            use_ssl = getattr(config.mqtt, 'use_ssl', False)
-            ca_certs = getattr(config.mqtt, 'ca_certs', None)
-            host, port = config.mqtt.host, config.mqtt.port
-            user, password = config.mqtt.user, config.mqtt.password
-            if os.environ.get("TERRAPI_MANAGED_TLS") == "1":
-                host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
-                user, password = os.environ["MQTT_USER"], os.environ["MQTT_PASSWORD"]
-                use_ssl = True
-            client = tp.client.MosquittoClient(host, port, use_ssl, ca_certs)
-
-            # Create TerraHandler (sets up message handler)
-            terra_handler = tp.terra_handler.TerraHandler(terrarium, client, config, conf)
-
-            # Now connect (after message handler is set)
-            client.connect(user, password)
-
-            # run 
-            try:
-                terra_handler.run()
-            finally:
-                terra_handler.close()
-        
-        except KeyboardInterrupt:
-            print("Exiting")
-            GPIO.cleanup()
-            client.disconnect()
-            exit(0)
-
-        except Exception as e:
-            # Print whole stack trace
-            import traceback
-            traceback.print_exc()
-
-            
-            print("Retrying in 10s")
-            GPIO.cleanup()
-            if client is not None:
-                client.disconnect()
+            run_once(args.conf)
+        except Exception:
+            logging.exception("Controller stopped. Retrying in 10 seconds.")
             time.sleep(10)
 
-run()
+
+if __name__ == "__main__":
+    run()

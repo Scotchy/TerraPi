@@ -40,7 +40,8 @@ interface Period {
     mode: string;
 }
 
-interface FullConfig {
+export interface FullConfig {
+    revision?: string;
     modes: { [modeName: string]: Mode };
     planning: {
         active: boolean;
@@ -57,7 +58,8 @@ interface SettingsModalProps {
     visible: boolean;
     config: FullConfig | null;
     onClose: () => void;
-    onSave: (section: string, data: any) => void;
+    online: boolean;
+    onSave: (data: Pick<FullConfig, 'modes' | 'planning'>, revision: string) => Promise<void>;
     onDisconnect?: () => void;
 }
 
@@ -70,6 +72,9 @@ interface SettingsModalState {
         periods: { [periodName: string]: Period };
     };
     hasChanges: boolean;
+    revision?: string;
+    saving: boolean;
+    error: string;
 }
 
 export class SettingsModal extends React.Component<SettingsModalProps, SettingsModalState> {
@@ -79,20 +84,28 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
             activeTab: 'modes',
             editedModes: {},
             editedPlanning: { active: false, default_mode: '', periods: {} },
-            hasChanges: false
+            hasChanges: false,
+            saving: false,
+            error: ''
         };
     }
 
     componentDidUpdate(prevProps: SettingsModalProps) {
-        // Reset state when modal opens with new config
-        if (this.props.visible && !prevProps.visible && this.props.config) {
-            this.setState({
-                editedModes: JSON.parse(JSON.stringify(this.props.config.modes)),
-                editedPlanning: JSON.parse(JSON.stringify(this.props.config.planning)),
-                hasChanges: false
-            });
+        if (this.props.visible && (!prevProps.visible ||
+            (prevProps.config !== this.props.config && !this.state.hasChanges))) {
+            this.loadDraft();
         }
     }
+
+    loadDraft = () => {
+        const config = this.props.config;
+        this.setState({
+            editedModes: config?.modes ?? {},
+            editedPlanning: config?.planning ?? { active: false, default_mode: '', periods: {} },
+            revision: config?.revision,
+            hasChanges: false, error: ''
+        });
+    };
 
     handleModeControlChange = (modeName: string, controlName: string, value: ControlValue) => {
         this.setState(prevState => ({
@@ -137,8 +150,10 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
 
     handleModeNameChange = (oldName: string, newName: string) => {
         if (newName === oldName) return;
-        if (newName.trim() === '') return;
-        
+        if (!newName || Object.prototype.hasOwnProperty.call(this.state.editedModes, newName)) {
+            this.setState({ error: 'Choose a unique, nonempty mode name.' });
+            return;
+        }
         this.setState(prevState => {
             const { [oldName]: modeData, ...restModes } = prevState.editedModes;
             
@@ -288,8 +303,10 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
 
     handlePeriodNameChange = (oldName: string, newName: string) => {
         if (newName === oldName) return;
-        if (newName.trim() === '') return;
-        
+        if (!newName || Object.prototype.hasOwnProperty.call(this.state.editedPlanning.periods, newName)) {
+            this.setState({ error: 'Choose a unique, nonempty period name.' });
+            return;
+        }
         this.setState(prevState => {
             const { [oldName]: periodData, ...restPeriods } = prevState.editedPlanning.periods;
             return {
@@ -346,18 +363,23 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
         });
     };
 
-    handleSave = () => {
-        if (this.state.activeTab === 'modes') {
-            this.props.onSave('modes', this.state.editedModes);
-        } else {
-            this.props.onSave('planning', this.state.editedPlanning);
+    handleSave = async () => {
+        const { revision, editedModes, editedPlanning } = this.state;
+        if (!revision || this.state.saving) return;
+        this.setState({ saving: true, error: '' });
+        try {
+            await this.props.onSave({ modes: editedModes, planning: editedPlanning }, revision);
+            this.setState({ hasChanges: false });
+            this.props.onClose();
+        } catch (error) {
+            this.setState({ error: error instanceof Error ? error.message : 'Save failed' });
+        } finally {
+            this.setState({ saving: false });
         }
-        this.setState({ hasChanges: false });
     };
 
     handleClose = () => {
-        this.setState({ hasChanges: false });
-        this.props.onClose();
+        if (!this.state.saving) this.props.onClose();
     };
 
     getControlNames(): string[] {
@@ -398,8 +420,13 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                                 <input
                                     type="text"
                                     className="mode-name-input"
+                                    aria-label={`Rename mode ${modeName}`}
                                     defaultValue={modeName}
-                                    onBlur={(e) => this.handleModeNameChange(modeName, e.target.value.trim())}
+                                    onBlur={e => {
+                                            const name = e.target.value.trim();
+                                            e.target.value = modeName;
+                                            this.handleModeNameChange(modeName, name);
+                                        }}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             (e.target as HTMLInputElement).blur();
@@ -583,8 +610,13 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                                     <input
                                         type="text"
                                         className="period-name-input"
+                                        aria-label={`Rename period ${periodName}`}
                                         defaultValue={periodName}
-                                        onBlur={(e) => this.handlePeriodNameChange(periodName, e.target.value.trim())}
+                                        onBlur={e => {
+                                            const name = e.target.value.trim();
+                                            e.target.value = periodName;
+                                            this.handlePeriodNameChange(periodName, name);
+                                        }}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
                                                 (e.target as HTMLInputElement).blur();
@@ -640,6 +672,8 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
             return null;
         }
 
+        const conflict = !this.state.saving && this.state.hasChanges && this.state.revision !== this.props.config?.revision;
+        const writable = this.props.online && !!this.state.revision && !this.state.saving;
         return (
             <div className="modal-overlay" onClick={this.handleClose}>
                 <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -663,10 +697,17 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                         </button>
                     </div>
 
-                    <div className="modal-body">
+                    {this.state.error && <p role="alert">{this.state.error}</p>}
+                    {conflict && this.props.config && <p role="alert">
+                        Settings changed on the controller. <button onClick={this.loadDraft}>Discard draft and reload</button>
+                    </p>}
+                    {!this.props.online && <p role="status">Waiting for the controller</p>}
+                    {this.props.online && this.props.config && !this.props.config.revision &&
+                        <p role="status">Update the controller to enable settings edits.</p>}
+                    <fieldset className="modal-body" disabled={!writable}>
                         {this.state.activeTab === 'modes' && this.renderModesTab()}
                         {this.state.activeTab === 'planning' && this.renderPlanningTab()}
-                    </div>
+                    </fieldset>
 
                     <div className="modal-footer">
                         {this.props.onDisconnect && (
@@ -684,7 +725,7 @@ export class SettingsModal extends React.Component<SettingsModalProps, SettingsM
                         <button 
                             className="btn btn-primary" 
                             onClick={this.handleSave}
-                            disabled={!this.state.hasChanges}
+                            disabled={!writable || conflict || !this.state.hasChanges}
                         >
                             Save Changes
                         </button>

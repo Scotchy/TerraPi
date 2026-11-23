@@ -3,7 +3,7 @@
 set -euo pipefail
 scratch=$(mktemp -d)
 network="terrapi-test-$(basename "$scratch" | tr '[:upper:].' '[:lower:]-')"
-export FRONTEND_IMAGE=terrapi-ci/frontend:test WEB_PORT=0
+export FRONTEND_IMAGE="${FRONTEND_IMAGE:-terrapi-ci/frontend:test}" WEB_PORT=0
 export MONITORING_IMAGE=terrapi-ci/monitoring:test MONITORING_SETTINGS_FILE="$scratch/monitoring.json"
 export BROKER_IMAGE DATA_VOLUME="$network-data" LOG_VOLUME="$network-logs" BROKER_CONFIG_DIR="$scratch"
 BROKER_IMAGE=$(cat deploy/vps/broker-image)
@@ -27,20 +27,20 @@ docker volume create "$LOG_VOLUME" >/dev/null
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=broker \
     -addext 'subjectAltName=DNS:broker' -keyout "$scratch/key.pem" -out "$scratch/chain.pem" 2>/dev/null
 cp deploy/vps/acl.example "$scratch/acl"
-printf '\nuser fixture\ntopic readwrite ci/#\ntopic readwrite terrapi/deploy/controller/#\n' >> "$scratch/acl"
+printf '\nuser fixture\ntopic readwrite ci/#\n' >> "$scratch/acl"
 # Run as the current user so the synthetic files can be removed after the test.
 docker run --rm --user "$(id -u):$(id -g)" -v "$scratch:/test" --entrypoint mosquitto_passwd \
     "$BROKER_IMAGE" -b -c /test/passwords fixture fixture-test-only
-for role in monitoring dashboard; do
+for role in monitoring dashboard controller updater release-publisher; do
     docker run --rm --user "$(id -u):$(id -g)" -v "$scratch:/test" --entrypoint mosquitto_passwd \
-        "$BROKER_IMAGE" -H sha512-pbkdf2 -b /test/passwords "$role" "$role-test-only"
+        "$BROKER_IMAGE" -H sha512-pbkdf2 -b /test/passwords "$role" fixture-test-only
 done
 PYTHONPATH=deploy/ci python3 - "$scratch" <<'PY'
 import json, sys
 from pathlib import Path
 from dispatch import monitoring_settings
 root = Path(sys.argv[1])
-settings = monitoring_settings({"mqtt_user": "monitoring", "mqtt_password": "monitoring-test-only",
+settings = monitoring_settings({"mqtt_user": "monitoring", "mqtt_password": "fixture-test-only",
                                 "dashboard_user": "dashboard"}, (root / "passwords").read_text())
 (root / "monitoring.json").write_text(json.dumps(settings))
 PY
@@ -78,14 +78,14 @@ history = f"http://frontend:8080/terra/api/monitoring/history?start={end-3600}&e
 def request(user, password):
     basic = base64.b64encode(f"{user}:{password}".encode()).decode()
     return Request(history, headers={"Authorization": "Basic " + basic})
-for denied in (history, request("monitoring", "monitoring-test-only"), request("dashboard", "wrong")):
+for denied in (history, request("monitoring", "fixture-test-only"), request("dashboard", "wrong")):
     try:
         urlopen(denied, timeout=2)
     except HTTPError as err:
         assert err.code in (401, 403), err.code
     else:
         raise AssertionError("Private history accessible with incorrect credentials")
-with urlopen(request("dashboard", "dashboard-test-only"), timeout=4) as response:
+with urlopen(request("dashboard", "fixture-test-only"), timeout=4) as response:
     assert response.headers.get_content_type() == "application/json"
     assert json.load(response)["summary"]["online"] == 0
 for transport, host, port, path, tls in [
@@ -108,15 +108,38 @@ for transport, host, port, path, tls in [
     assert done.wait(8), (transport, port)
     client.disconnect()
     client.loop_stop()
+# Exercise the production role template on the dashboard's request/response topics.
+def role_client(name, subscribe, callback):
+    client = mqtt.Client()
+    ready = Event()
+    client.username_pw_set(name, "fixture-test-only")
+    client.tls_set_context(ssl.create_default_context())
+    client.on_connect = lambda c, _, flags, rc: c.subscribe(subscribe)
+    client.on_subscribe = lambda *args: ready.set()
+    client.on_message = callback
+    client.connect("broker", 1883)
+    client.loop_start()
+    assert ready.wait(5)
+    return client
+
+received = Event()
+controller = role_client("controller", "config/get", lambda c, _, msg: c.publish("config/full", "snapshot"))
+dashboard = role_client("dashboard", "config/full", lambda c, _, msg: received.set() if msg.payload == b"snapshot" else None)
+dashboard.publish("config/get", "1")
+assert received.wait(5)
+for client in (controller, dashboard):
+    client.disconnect()
+    client.loop_stop()
+
 sys.path.insert(0, "/app")
 from notify import TOPIC, run
-fixture = {"host": "broker", "username": "fixture", "password": "fixture-test-only"}
+fixture = {"host": "broker", "username": "release-publisher", "password": "fixture-test-only"}
 assert run(fixture, "tcp", 1883) == "healthy"
 assert run(fixture, "websockets", 9001) == "healthy"
 ready = Event()
 device = mqtt.Client()
 device.tls_set_context(ssl.create_default_context())
-device.username_pw_set(fixture["username"], fixture["password"])
+device.username_pw_set("updater", fixture["password"])
 device.on_connect = lambda c, _, flags, rc: c.subscribe(TOPIC + "/wake", qos=1)
 device.on_subscribe = lambda *args: ready.set()
 device.on_message = lambda c, _, msg: c.publish(TOPIC + "/status", json.dumps({"sequence": 42, "result": "healthy"}), qos=1)

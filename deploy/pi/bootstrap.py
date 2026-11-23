@@ -66,7 +66,8 @@ def main():
     for name in ("updater.json", "recipient.pem", "recipient.key", "signing.pub"):
         install(private / name, keys / name, 0o600)
     source = Path(__file__).resolve().parent
-    for name in ("updater.py", "start_controller.py"):
+    install(source.parents[1] / "backend/terrapi/config_schema.py", tools / "config_schema.py", 0o644)
+    for name in ("updater.py", "start_controller.py", "check_candidate.py"):
         install(source / name, tools / name, 0o755)
     for name in ("terrapi-updater.service", "terrapi-controller.service"):
         install(source / name, Path("/etc/systemd/system") / name, 0o644)
