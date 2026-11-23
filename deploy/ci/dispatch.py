@@ -88,17 +88,21 @@ def prepare(component, release, metadata, work):
 
 def main():
     os.umask(0o077)
-    if sys.argv[1] == "all":
-        names = ("VPS_HOST VPS_USER VPS_KNOWN_HOSTS DEPLOY_KEY WEB_PORT BROKER_MONITOR BROKER_VOLUMES "
-                 "BROKER_PASSWORD_FILE BROKER_ACL BROKER_CERT BROKER_KEY MONITORING_SETTINGS PI_SETTINGS "
-                 "PI_RECIPIENT_CERT RELEASE_SIGNING_KEY").split()
-        missing = [name for name in names if not os.environ.get(name)]
-        if missing:
-            sys.exit("Missing production-vps secrets: " + ", ".join(missing))
     component = sys.argv[1]
+    shared_secrets = "VPS_HOST VPS_USER VPS_KNOWN_HOSTS DEPLOY_KEY BROKER_MONITOR"
+    environment_secrets = {
+        "vps": ("production-vps", shared_secrets + " WEB_PORT BROKER_VOLUMES BROKER_PASSWORD_FILE "
+                "BROKER_ACL BROKER_CERT BROKER_KEY MONITORING_SETTINGS"),
+        "controller": ("production-pi", shared_secrets + " PI_SETTINGS PI_RECIPIENT_CERT RELEASE_SIGNING_KEY"),
+    }
+    if component in environment_secrets:
+        environment, names = environment_secrets[component]
+        missing = [name for name in names.split() if not os.environ.get(name)]
+        if missing:
+            sys.exit(f"Missing {environment} secrets: " + ", ".join(missing))
     release = Path(sys.argv[2])
     metadata = json.loads((release / "release.json").read_text())
-    components = ("broker", "monitoring", "frontend", "controller") if component == "all" else (component,)
+    components = ("broker", "monitoring", "frontend") if component == "vps" else (component,)
     with tempfile.TemporaryDirectory() as directory:
         work = Path(directory)
         packages = [prepare(name, release, metadata, work) for name in components]
