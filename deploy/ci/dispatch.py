@@ -13,6 +13,14 @@ import time
 from monitoring_config import MonitoringConfigurationError, configure
 
 
+MONITORING_ERRORS = {
+    b"monitoring-template-missing": "The installed VPS deploy helper is missing its monitoring Compose file.",
+    b"monitoring-image-pull-failed": "The VPS could not pull the monitoring image from GHCR.",
+    b"monitoring-service-start-failed": "The VPS could not start the monitoring container with Docker Compose.",
+    b"monitoring-health-check-failed": "The monitoring container did not confirm its MQTT subscription.",
+}
+
+
 def required(name):
     value = os.environ[name]
     if not value:
@@ -141,14 +149,22 @@ def main():
                    "--", host, "terrapi-deploy"]
         # A forced SSH command is the only supported server entry point.
         for package in packages:
-            print("Deploying " + package["component"], flush=True)
+            target = package["component"]
+            print("Deploying " + target, flush=True)
             job = subprocess.run(command, input=json.dumps(package).encode(),
-                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=660)
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=660)
             if job.returncode == 75:
                 sys.exit("Release published. Pi acknowledgment is pending. Retry this run to check again.")
             if job.returncode:
-                raise RuntimeError("Deployment did not verify. Check the private VPS deployment journal.")
-            print("Verified " + package["component"], flush=True)
+                if target == "monitoring":
+                    detail = MONITORING_ERRORS.get(job.stdout.strip())
+                    if detail:
+                        sys.exit(detail)
+                    if b"monitoring.yaml" in job.stderr and b"no such file" in job.stderr.lower():
+                        sys.exit(MONITORING_ERRORS[b"monitoring-template-missing"])
+                    sys.exit("The VPS did not report why monitoring failed. Check support with Provision VPS deploy helper.")
+                sys.exit(f"The VPS did not verify the {target} deployment.")
+            print("Verified " + target, flush=True)
     print("Deployment verified.")
 
 

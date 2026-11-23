@@ -46,6 +46,12 @@ The controller samples once per minute and keeps up to 14 days of unacknowledged
 
 History survives container and image changes in `/data/history.sqlite3`. To back it up, stop the monitoring container briefly and copy the entire `terrapi_monitoring_data` volume to separate storage, then restart monitoring. Restore a consistent volume copy while the recorder is stopped. The controller queues readings during the interruption. Docker rotates the recorder's logs at 1 MB and keeps two files.
 
+### Check or upgrade the VPS deploy helper from GitHub
+
+**Provision VPS deploy helper** runs from `main` and uses the same concurrency group as Deploy. Configure the `production-vps-provisioning` environment with access restricted to `main` and a required reviewer. Set `VPS_HOST` and `VPS_KNOWN_HOSTS` from the existing VPS connection details. Set `VPS_ADMIN_USER` and `VPS_ADMIN_KEY` from a separately authorized VPS admin identity with non-interactive sudo access. The regular deployment identity remains restricted to `apply.py`.
+
+Choose `check` to see whether the installed helper supports monitoring. Choose `install` to install `apply.py` and `monitoring.yaml` from `main`. It verifies that the existing provisioning is present and obtains the same host lock used by Deploy. The workflow preserves the broker, volumes, allowlists and runtime state. Run **Deploy** again after installing to start and verify the monitoring service.
+
 ## Pair the Pi once
 
 Prepare a trusted LAN maintenance session. Keep the running manual controller, its original config and a way to restart it until the managed baseline is verified. The supported target is a 32-bit ARMv7 Pi with Python 3.9, systemd, OpenSSL, venv support and working GPIO access through the `gpio` group. Install the dependencies in [requirements-pi.txt](../backend/requirements-pi.txt) where the service account’s system Python can import them. The updater uses the system Paho installation independently. Check GPIO device permissions and the configured timezone. Keep signing and bootstrap files outside Git.

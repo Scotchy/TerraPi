@@ -19,6 +19,10 @@ ROOT = Path("/var/lib/terrapi-deploy")
 TOOLS = Path(__file__).resolve().parent
 
 
+class DeploymentError(RuntimeError):
+    pass
+
+
 def atomic(path, data):
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as temp:
         temp.write(data)
@@ -151,8 +155,13 @@ def broker(job):
 
 
 def monitoring(job):
+    if not (TOOLS / "monitoring.yaml").is_file():
+        raise DeploymentError("monitoring-template-missing")
     ref = image(job["release"]["monitoring"], "monitoring")
-    docker("pull", ref)
+    try:
+        docker("pull", ref)
+    except subprocess.CalledProcessError as error:
+        raise DeploymentError("monitoring-image-pull-failed") from error
     # Keep the previous settings path available to activate() during rollback.
     with tempfile.NamedTemporaryFile(prefix="monitoring-settings-", dir=ROOT, delete=False) as settings:
         settings.write(json.dumps(job["settings"]).encode())
@@ -161,12 +170,18 @@ def monitoring(job):
     cfg = {"MONITORING_IMAGE": ref, "MONITORING_SETTINGS_FILE": settings.name}
 
     def check():
-        docker("compose", "--project-directory", ROOT, "-f", TOOLS / "monitoring.yaml",
-               "exec", "-T", "monitoring", "python", "-c",
-               "from urllib.request import urlopen; urlopen('http://127.0.0.1:8081/health', timeout=3).close()",
-               env=dict(os.environ, **cfg))
+        try:
+            docker("compose", "--project-directory", ROOT, "-f", TOOLS / "monitoring.yaml",
+                   "exec", "-T", "monitoring", "python", "-c",
+                   "from urllib.request import urlopen; urlopen('http://127.0.0.1:8081/health', timeout=3).close()",
+                   env=dict(os.environ, **cfg))
+        except subprocess.CalledProcessError as error:
+            raise DeploymentError("monitoring-health-check-failed") from error
 
-    activate("monitoring", cfg, check)
+    try:
+        activate("monitoring", cfg, check)
+    except subprocess.CalledProcessError as error:
+        raise DeploymentError("monitoring-service-start-failed") from error
     # A rollback recreates settings from the release's environment secrets.
     for previous in ROOT.glob("monitoring-settings-*"):
         if previous.is_file() and str(previous) != settings.name:
@@ -234,6 +249,8 @@ if __name__ == "__main__":
         main()
     except Exception as error:
         subprocess.run(["logger", "-t", "terrapi-deploy", "Deployment failed: " + type(error).__name__])
+        if isinstance(error, DeploymentError):
+            print(str(error), flush=True)
         if isinstance(error, subprocess.CalledProcessError) and error.returncode == 75:
             sys.exit(75)
         sys.exit(1)
