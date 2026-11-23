@@ -2,15 +2,10 @@ name: Deploy
 on:
   workflow_dispatch:
     inputs:
-      component:
-        description: Component to deploy or roll back
-        type: choice
-        options: [frontend, controller, broker, monitoring]
-        required: true
       build_run:
-        description: Successful main build run ID (choose an earlier build for rollback)
+        description: Optional successful main build ID (defaults to latest successful release)
         type: string
-        required: true
+        required: false
 
 permissions:
   contents: read
@@ -25,8 +20,8 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    environment: ${{ inputs.component == 'controller' && 'production-pi' || 'production-vps' }}
+    timeout-minutes: 50
+    environment: production-vps
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -36,6 +31,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BUILD_RUN: ${{ inputs.build_run }}
         run: |
+          if [[ -z "$BUILD_RUN" ]]; then
+            BUILD_RUN=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=100" \
+              --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0].id // empty')
+          fi
           [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN")
           jq -e --arg repo "$GITHUB_REPOSITORY" '.head_repository.full_name == $repo and
@@ -43,25 +42,24 @@ jobs:
             (.event == "push" or .event == "workflow_dispatch") and .conclusion == "success"' <<< "$run" >/dev/null
           gh run download "$BUILD_RUN" -n terrapi-release -D "$RUNNER_TEMP/release"
           jq -e --arg sha "$(jq -r .head_sha <<< "$run")" '.revision == $sha' "$RUNNER_TEMP/release/release.json" >/dev/null
-      - name: Apply selected release
+      - name: Deploy and verify the full stack
         env:
-          COMPONENT: ${{ inputs.component }}
           DEPLOY_SEQUENCE: ${{ github.run_number }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-          WEB_PORT: ${{ inputs.component == 'frontend' && secrets.WEB_PORT || '' }}
-          DASHBOARD_URL: ${{ inputs.component == 'frontend' && secrets.DASHBOARD_URL || '' }}
-          BROKER_MONITOR: ${{ (inputs.component == 'broker' || inputs.component == 'controller') && secrets.BROKER_MONITOR || '' }}
-          BROKER_VOLUMES: ${{ inputs.component == 'broker' && secrets.BROKER_VOLUMES || '' }}
-          BROKER_PASSWORD_FILE: ${{ (inputs.component == 'broker' || inputs.component == 'monitoring') && secrets.BROKER_PASSWORD_FILE || '' }}
-          MONITORING_SETTINGS: ${{ inputs.component == 'monitoring' && secrets.MONITORING_SETTINGS || '' }}
-          BROKER_ACL: ${{ inputs.component == 'broker' && secrets.BROKER_ACL || '' }}
-          BROKER_CERT: ${{ inputs.component == 'broker' && secrets.BROKER_CERT || '' }}
-          BROKER_KEY: ${{ inputs.component == 'broker' && secrets.BROKER_KEY || '' }}
-          PI_SETTINGS: ${{ inputs.component == 'controller' && secrets.PI_SETTINGS || '' }}
-          PI_RECIPIENT_CERT: ${{ inputs.component == 'controller' && secrets.PI_RECIPIENT_CERT || '' }}
-          RELEASE_SIGNING_KEY: ${{ inputs.component == 'controller' && secrets.RELEASE_SIGNING_KEY || '' }}
+          WEB_PORT: ${{ secrets.WEB_PORT }}
+          DASHBOARD_URL: ${{ secrets.DASHBOARD_URL }}
+          BROKER_MONITOR: ${{ secrets.BROKER_MONITOR }}
+          BROKER_VOLUMES: ${{ secrets.BROKER_VOLUMES }}
+          BROKER_PASSWORD_FILE: ${{ secrets.BROKER_PASSWORD_FILE }}
+          MONITORING_SETTINGS: ${{ secrets.MONITORING_SETTINGS }}
+          BROKER_ACL: ${{ secrets.BROKER_ACL }}
+          BROKER_CERT: ${{ secrets.BROKER_CERT }}
+          BROKER_KEY: ${{ secrets.BROKER_KEY }}
+          PI_SETTINGS: ${{ secrets.PI_SETTINGS }}
+          PI_RECIPIENT_CERT: ${{ secrets.PI_RECIPIENT_CERT }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           REGISTRY_TOKEN: ${{ github.token }}
-        run: python3 deploy/ci/dispatch.py "$COMPONENT" "$RUNNER_TEMP/release"
+        run: python3 deploy/ci/dispatch.py all "$RUNNER_TEMP/release"

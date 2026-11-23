@@ -62,33 +62,46 @@ def controller_files(work, bundle, sequence, revision):
     return {"envelope": envelope, "bundle": encode(bundle), "settings": encode(encrypted)}
 
 
+def prepare(component, release, metadata, work):
+    package = {"component": component, "release": metadata, "sequence": int(required("DEPLOY_SEQUENCE"))}
+    package["registry"] = {"username": required("GITHUB_ACTOR"), "token": required("REGISTRY_TOKEN")}
+    if component == "controller":
+        bundle = (release / "controller.tgz").read_bytes()
+        if hashlib.sha256(bundle).hexdigest() != metadata["controller_sha256"]:
+            raise ValueError("Controller checksum mismatch")
+        package.update(controller_files(work, bundle, package["sequence"], metadata["revision"]))
+    if component == "frontend":
+        package["web_port"] = int(required("WEB_PORT"))
+        package["dashboard_url"] = os.environ.get("DASHBOARD_URL", "")
+    elif component in ("broker", "controller"):
+        package["monitor"] = json.loads(required("BROKER_MONITOR"))
+    elif component == "monitoring":
+        package["settings"] = monitoring_settings(json.loads(required("MONITORING_SETTINGS")),
+                                                  required("BROKER_PASSWORD_FILE"))
+    if component == "broker":
+        package["volumes"] = json.loads(required("BROKER_VOLUMES"))
+        package["files"] = {filename: required(secret) for filename, secret in {
+            "passwords": "BROKER_PASSWORD_FILE", "acl": "BROKER_ACL",
+            "chain.pem": "BROKER_CERT", "key.pem": "BROKER_KEY"}.items()}
+    return package
+
+
 def main():
     os.umask(0o077)
+    if sys.argv[1] == "all":
+        names = ("VPS_HOST VPS_USER VPS_KNOWN_HOSTS DEPLOY_KEY WEB_PORT BROKER_MONITOR BROKER_VOLUMES "
+                 "BROKER_PASSWORD_FILE BROKER_ACL BROKER_CERT BROKER_KEY MONITORING_SETTINGS PI_SETTINGS "
+                 "PI_RECIPIENT_CERT RELEASE_SIGNING_KEY").split()
+        missing = [name for name in names if not os.environ.get(name)]
+        if missing:
+            sys.exit("Missing production-vps secrets: " + ", ".join(missing))
     component = sys.argv[1]
     release = Path(sys.argv[2])
     metadata = json.loads((release / "release.json").read_text())
-    package = {"component": component, "release": metadata, "sequence": int(required("DEPLOY_SEQUENCE"))}
-    package["registry"] = {"username": required("GITHUB_ACTOR"), "token": required("REGISTRY_TOKEN")}
+    components = ("broker", "monitoring", "frontend", "controller") if component == "all" else (component,)
     with tempfile.TemporaryDirectory() as directory:
         work = Path(directory)
-        if component == "controller":
-            bundle = (release / "controller.tgz").read_bytes()
-            if hashlib.sha256(bundle).hexdigest() != metadata["controller_sha256"]:
-                raise ValueError("Controller checksum mismatch")
-            package.update(controller_files(work, bundle, package["sequence"], metadata["revision"]))
-        if component == "frontend":
-            package["web_port"] = int(required("WEB_PORT"))
-            package["dashboard_url"] = os.environ.get("DASHBOARD_URL", "")
-        elif component in ("broker", "controller"):
-            package["monitor"] = json.loads(required("BROKER_MONITOR"))
-        elif component == "monitoring":
-            package["settings"] = monitoring_settings(json.loads(required("MONITORING_SETTINGS")),
-                                                      required("BROKER_PASSWORD_FILE"))
-        if component == "broker":
-            package["volumes"] = json.loads(required("BROKER_VOLUMES"))
-            package["files"] = {filename: required(secret) for filename, secret in {
-                "passwords": "BROKER_PASSWORD_FILE", "acl": "BROKER_ACL",
-                "chain.pem": "BROKER_CERT", "key.pem": "BROKER_KEY"}.items()}
+        packages = [prepare(name, release, metadata, work) for name in components]
         key = work / "identity"
         key.write_text(required("DEPLOY_KEY").strip() + "\n")
         known = work / "known_hosts"
@@ -101,12 +114,15 @@ def main():
                    "-o", "UserKnownHostsFile=" + str(known), "-o", "ConnectTimeout=12",
                    "--", host, "terrapi-deploy"]
         # A forced SSH command is the only supported server entry point.
-        job = subprocess.run(command, input=json.dumps(package).encode(),
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=660)
-        if job.returncode == 75:
-            sys.exit("Release published. Pi acknowledgment is pending. Retry this run to check again.")
-        if job.returncode:
-            raise RuntimeError("Deployment did not verify. Check the private VPS deployment journal.")
+        for package in packages:
+            print("Deploying " + package["component"], flush=True)
+            job = subprocess.run(command, input=json.dumps(package).encode(),
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=660)
+            if job.returncode == 75:
+                sys.exit("Release published. Pi acknowledgment is pending. Retry this run to check again.")
+            if job.returncode:
+                raise RuntimeError("Deployment did not verify. Check the private VPS deployment journal.")
+            print("Verified " + package["component"], flush=True)
     print("Deployment verified.")
 
 
