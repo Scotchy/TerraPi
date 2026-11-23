@@ -61,6 +61,8 @@ jobs:
           BROKER_VOLUMES: ${{ secrets.BROKER_VOLUMES }}
           BROKER_PASSWORD_FILE: ${{ secrets.BROKER_PASSWORD_FILE }}
           MONITORING_SETTINGS: ${{ secrets.MONITORING_SETTINGS }}
+          MONITORING_DASHBOARD_USER: ${{ secrets.MONITORING_DASHBOARD_USER }}
+          MONITORING_CONTROLLER_USER: ${{ secrets.MONITORING_CONTROLLER_USER }}
           BROKER_ACL: ${{ secrets.BROKER_ACL }}
           BROKER_CERT: ${{ secrets.BROKER_CERT }}
           BROKER_KEY: ${{ secrets.BROKER_KEY }}
