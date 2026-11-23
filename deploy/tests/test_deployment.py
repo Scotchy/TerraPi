@@ -27,7 +27,8 @@ def load(name, path):
 
 
 updater = load("updater", BASE / "pi/updater.py")
-dispatch = load("dispatch", BASE / "ci/dispatch.py")
+with patch.object(sys, "path", [str(BASE / "ci"), *sys.path]):
+    dispatch = load("dispatch", BASE / "ci/dispatch.py")
 vps = load("vps", BASE / "vps/apply.py")
 
 

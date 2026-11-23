@@ -17,16 +17,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  deploy-vps:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 35
     environment: production-vps
+    outputs:
+      build_run: ${{ steps.release.outputs.build_run }}
+      revision: ${{ steps.release.outputs.revision }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
       - name: Fetch release from a successful trusted build
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD_RUN: ${{ inputs.build_run }}
@@ -41,8 +45,10 @@ jobs:
             .head_branch == "main" and .path == ".github/workflows/ci.yml" and
             (.event == "push" or .event == "workflow_dispatch") and .conclusion == "success"' <<< "$run" >/dev/null
           gh run download "$BUILD_RUN" -n terrapi-release -D "$RUNNER_TEMP/release"
-          jq -e --arg sha "$(jq -r .head_sha <<< "$run")" '.revision == $sha' "$RUNNER_TEMP/release/release.json" >/dev/null
-      - name: Deploy and verify the full stack
+          revision=$(jq -r .head_sha <<< "$run")
+          jq -e --arg sha "$revision" '.revision == $sha' "$RUNNER_TEMP/release/release.json" >/dev/null
+          printf 'build_run=%s\nrevision=%s\n' "$BUILD_RUN" "$revision" >> "$GITHUB_OUTPUT"
+      - name: Deploy and verify the VPS services
         env:
           DEPLOY_SEQUENCE: ${{ github.run_number }}
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -55,11 +61,43 @@ jobs:
           BROKER_VOLUMES: ${{ secrets.BROKER_VOLUMES }}
           BROKER_PASSWORD_FILE: ${{ secrets.BROKER_PASSWORD_FILE }}
           MONITORING_SETTINGS: ${{ secrets.MONITORING_SETTINGS }}
+          MONITORING_DASHBOARD_USER: ${{ secrets.MONITORING_DASHBOARD_USER }}
+          MONITORING_CONTROLLER_USER: ${{ secrets.MONITORING_CONTROLLER_USER }}
           BROKER_ACL: ${{ secrets.BROKER_ACL }}
           BROKER_CERT: ${{ secrets.BROKER_CERT }}
           BROKER_KEY: ${{ secrets.BROKER_KEY }}
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: python3 deploy/ci/dispatch.py vps "$RUNNER_TEMP/release"
+
+  deploy-controller:
+    needs: deploy-vps
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production-pi
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Fetch the same trusted release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RUN: ${{ needs.deploy-vps.outputs.build_run }}
+          REVISION: ${{ needs.deploy-vps.outputs.revision }}
+        run: |
+          [[ "$BUILD_RUN" =~ ^[0-9]+$ ]]
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]]
+          gh run download "$BUILD_RUN" -n terrapi-release -D "$RUNNER_TEMP/release"
+          jq -e --arg sha "$REVISION" '.revision == $sha' "$RUNNER_TEMP/release/release.json" >/dev/null
+      - name: Deploy and verify the Pi controller
+        env:
+          DEPLOY_SEQUENCE: ${{ github.run_number }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          BROKER_MONITOR: ${{ secrets.BROKER_MONITOR }}
           PI_SETTINGS: ${{ secrets.PI_SETTINGS }}
           PI_RECIPIENT_CERT: ${{ secrets.PI_RECIPIENT_CERT }}
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           REGISTRY_TOKEN: ${{ github.token }}
-        run: python3 deploy/ci/dispatch.py all "$RUNNER_TEMP/release"
+        run: python3 deploy/ci/dispatch.py controller "$RUNNER_TEMP/release"

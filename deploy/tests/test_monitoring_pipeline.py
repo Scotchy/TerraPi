@@ -19,6 +19,8 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
+with patch.object(sys, "path", [str(ROOT / "deploy/ci"), *sys.path]):
+    import dispatch
 sys.path.insert(0, str(ROOT / "backend"))
 with patch.dict(sys.modules, {name: MagicMock() for name in ("board", "adafruit_dht", "RPi", "RPi.GPIO")}):
     from terrapi.client import MosquittoClient
@@ -86,14 +88,24 @@ class MonitoringPipeline(unittest.TestCase):
         self.native, ws, self.http = free_ports(3)
         passwords = self.directory / "passwords"
         self.password = secrets.token_hex(16)
-        for user in ("dashboard", "monitoring", "controller"):
+        for user in ("dashboard", "controller"):
             command = ["mosquitto_passwd", "-b"]
             if not passwords.exists():
                 command.append("-c")
             subprocess.run(command + [str(passwords), user, self.password], check=True)
+        acl = self.directory / "acl"
+        baseline = (ROOT / "deploy/vps/acl.example").read_text()
+        baseline = "\n".join(line for line in baseline.splitlines()
+                             if not line.endswith(("terrapi/monitor/samples", "terrapi/monitor/ack"))
+                             and line != "user monitoring")
+        files, settings = dispatch.configure({"acl": baseline, "passwords": passwords.read_text()},
+                                             secrets.token_hex(32))
+        passwords.write_text(files["passwords"])
+        acl.write_text(files["acl"])
+        settings = dispatch.monitoring_settings(settings, files["passwords"])
         config = self.directory / "mosquitto.conf"
         config.write_text(f"allow_anonymous false\npassword_file {passwords}\n"
-                          f"acl_file {ROOT / 'deploy/vps/acl.example'}\n"
+                          f"acl_file {acl}\n"
                           f"listener {self.native} 127.0.0.1\nprotocol mqtt\n"
                           f"listener {ws} 127.0.0.1\nprotocol websockets\n")
         # Mosquitto drops privileges when invoked as root; a fixture under /tmp
@@ -102,11 +114,7 @@ class MonitoringPipeline(unittest.TestCase):
             config.write_text("user root\n" + config.read_text())
         self.launch("broker", ["mosquitto", "-c", str(config)])
         self.settings = self.directory / "settings.json"
-        digest = dict(line.split(":", 1) for line in passwords.read_text().splitlines())["dashboard"]
-        self.settings.write_text(json.dumps({
-            "mqtt_host": "127.0.0.1", "mqtt_port": ws, "mqtt_user": "monitoring",
-            "mqtt_password": self.password, "dashboard_user": "dashboard", "dashboard_hash": digest,
-        }))
+        self.settings.write_text(json.dumps(dict(settings, mqtt_host="127.0.0.1", mqtt_port=ws)))
 
     def test_restart_and_replay_preserve_connection_and_equipment_history(self):
         recorder = self.start_recorder()

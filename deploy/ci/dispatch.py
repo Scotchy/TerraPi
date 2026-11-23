@@ -10,6 +10,8 @@ import sys
 import tempfile
 import time
 
+from monitoring_config import MonitoringConfigurationError, configure
+
 
 def required(name):
     value = os.environ[name]
@@ -31,7 +33,7 @@ def monitoring_settings(settings, password_file):
     hashes = [digest for user, separator, digest in (line.partition(":") for line in password_file.splitlines())
               if separator and user == config["dashboard_user"]]
     if len(hashes) != 1 or not hashes[0].startswith("$7$"):
-        raise ValueError("Expected one Mosquitto PBKDF2 hash for the selected dashboard user")
+        raise MonitoringConfigurationError("Expected one Mosquitto PBKDF2 hash for the selected dashboard user")
     if "history_days" in settings:
         days = settings["history_days"]
         if type(days) is not int or not 1 <= days <= 1825:
@@ -62,7 +64,7 @@ def controller_files(work, bundle, sequence, revision):
     return {"envelope": envelope, "bundle": encode(bundle), "settings": encode(encrypted)}
 
 
-def prepare(component, release, metadata, work):
+def prepare(component, release, metadata, work, broker_files=None, history=None):
     package = {"component": component, "release": metadata, "sequence": int(required("DEPLOY_SEQUENCE"))}
     package["registry"] = {"username": required("GITHUB_ACTOR"), "token": required("REGISTRY_TOKEN")}
     if component == "controller":
@@ -76,32 +78,56 @@ def prepare(component, release, metadata, work):
     elif component in ("broker", "controller"):
         package["monitor"] = json.loads(required("BROKER_MONITOR"))
     elif component == "monitoring":
-        package["settings"] = monitoring_settings(json.loads(required("MONITORING_SETTINGS")),
-                                                  required("BROKER_PASSWORD_FILE"))
+        package["settings"] = history
     if component == "broker":
         package["volumes"] = json.loads(required("BROKER_VOLUMES"))
-        package["files"] = {filename: required(secret) for filename, secret in {
+        package["files"] = broker_files
+    return package
+
+
+def broker_inputs(component):
+    files = None
+    history = None
+    if component in ("broker", "vps"):
+        files = {filename: required(secret) for filename, secret in {
             "passwords": "BROKER_PASSWORD_FILE", "acl": "BROKER_ACL",
             "chain.pem": "BROKER_CERT", "key.pem": "BROKER_KEY"}.items()}
-    return package
+    if component in ("monitoring", "vps"):
+        settings = os.environ.get("MONITORING_SETTINGS")
+        if component == "vps" and not settings:
+            files, settings = configure(files, required("DEPLOY_KEY"),
+                                        os.environ.get("MONITORING_DASHBOARD_USER", ""),
+                                        os.environ.get("MONITORING_CONTROLLER_USER", ""))
+            history = monitoring_settings(settings, files["passwords"])
+        else:
+            history = monitoring_settings(json.loads(required("MONITORING_SETTINGS")),
+                                          required("BROKER_PASSWORD_FILE"))
+    return files, history
 
 
 def main():
     os.umask(0o077)
-    if sys.argv[1] == "all":
-        names = ("VPS_HOST VPS_USER VPS_KNOWN_HOSTS DEPLOY_KEY WEB_PORT BROKER_MONITOR BROKER_VOLUMES "
-                 "BROKER_PASSWORD_FILE BROKER_ACL BROKER_CERT BROKER_KEY MONITORING_SETTINGS PI_SETTINGS "
-                 "PI_RECIPIENT_CERT RELEASE_SIGNING_KEY").split()
-        missing = [name for name in names if not os.environ.get(name)]
-        if missing:
-            sys.exit("Missing production-vps secrets: " + ", ".join(missing))
     component = sys.argv[1]
+    shared_secrets = "VPS_HOST VPS_USER VPS_KNOWN_HOSTS DEPLOY_KEY BROKER_MONITOR"
+    environment_secrets = {
+        "vps": ("production-vps", shared_secrets + " WEB_PORT BROKER_VOLUMES BROKER_PASSWORD_FILE "
+                "BROKER_ACL BROKER_CERT BROKER_KEY"),
+        "controller": ("production-pi", shared_secrets + " PI_SETTINGS PI_RECIPIENT_CERT RELEASE_SIGNING_KEY"),
+    }
+    if component in environment_secrets:
+        environment, names = environment_secrets[component]
+        missing = [name for name in names.split() if not os.environ.get(name)]
+        if missing:
+            sys.exit(f"Missing {environment} secrets: " + ", ".join(missing))
     release = Path(sys.argv[2])
     metadata = json.loads((release / "release.json").read_text())
-    components = ("broker", "monitoring", "frontend", "controller") if component == "all" else (component,)
+    if component == "vps" and not metadata.get("monitoring"):
+        sys.exit("The selected build has no monitoring image. Select a build that includes monitoring.")
+    components = ("broker", "monitoring", "frontend") if component == "vps" else (component,)
+    broker_files, history = broker_inputs(component)
     with tempfile.TemporaryDirectory() as directory:
         work = Path(directory)
-        packages = [prepare(name, release, metadata, work) for name in components]
+        packages = [prepare(name, release, metadata, work, broker_files, history) for name in components]
         key = work / "identity"
         key.write_text(required("DEPLOY_KEY").strip() + "\n")
         known = work / "known_hosts"
@@ -129,6 +155,8 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except MonitoringConfigurationError as error:
+        sys.exit(str(error))
     except Exception as error:
         # Tool errors can contain endpoints or credentials. Keep public CI output generic.
         sys.exit("Deployment failed (" + type(error).__name__ + "). See the private deployment journal.")
