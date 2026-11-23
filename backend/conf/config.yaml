@@ -10,6 +10,8 @@ mqtt:
   # ca_certs: /path/to/ca.pem  # Optional: specify custom CA, otherwise uses system CAs
 
 log_interval: 5
+# Hold thermostat output through short reading gaps (seconds), then switch off.
+sensor_timeout: 30
 
 # Sensor definitions
 # type: class name in terrapi.sensor module

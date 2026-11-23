@@ -39,7 +39,7 @@ export MQTT_PASSWORD=your_password
 python run.py --conf conf/config.yaml
 ```
 
-**Requirements:** Raspberry Pi with GPIO access, Python 3.7+, MQTT broker
+**Requirements:** Raspberry Pi with GPIO access, Python 3.9 on the supported managed Pi, MQTT broker
 
 ### Frontend
 
@@ -59,7 +59,9 @@ Edit `backend/conf/config.yaml` to configure:
 - Control pins (relays)
 - Logging interval
 
-The same file contains the mode profiles and schedule.
+The same file contains the mode profiles and schedule. A missing thermostat sample holds the current output for up to `sensor_timeout` seconds (default 30). A longer gap switches the output off until a valid reading calls for it again. The dashboard shows temperature and humidity from the first configured sensor. Settings and manual selections survive controller restarts.
+
+Sign in for each browser session. The dashboard clears cookies and biometric password copies left by older versions. Its status indicates when the broker or controller stops reporting.
 
 ## Architecture
 

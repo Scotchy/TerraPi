@@ -6,10 +6,14 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import sys
 import tarfile
 import tempfile
 import time
 import unittest
+
+import yaml
 from unittest.mock import patch
 
 BASE = Path(__file__).resolve().parents[1]
@@ -115,3 +119,72 @@ class PiDeployment(unittest.TestCase):
                 updater.recover(record)
                 self.assertEqual((root / "current").resolve(), releases / "2")
                 run.assert_called_with("systemctl", "restart", updater.SERVICE)
+
+    def test_terminal_and_bounded_preflight_failures_keep_old_release(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = root / "releases/0"
+            old.mkdir(parents=True)
+            (root / "current").symlink_to(old)
+            desired = {"sequence": 1, "expires": time.time() + 60}
+            with patch.object(updater, "ROOT", root), patch.object(updater, "fetch", return_value=b"{}"), \
+                 patch.object(updater, "verify", return_value=desired), patch.object(updater, "prepare") as prepare:
+                prepare.side_effect = ValueError("Invalid schedule")
+                def reconcile():
+                    return updater.reconcile({"origin": "https://example.invalid"}, lambda _: self.fail("Activated"))
+
+                self.assertEqual(reconcile()["result"], "failed")
+                self.assertEqual(reconcile()["sequence"], 1)
+                self.assertEqual(prepare.call_count, 1)
+                desired["sequence"] = 2
+                prepare.side_effect = ConnectionError("Temporary outage")
+                self.assertEqual([reconcile()["result"] for _ in range(4)], ["retrying", "retrying", "failed", "failed"])
+                self.assertEqual(prepare.call_count, 4)
+                self.assertEqual((root / "current").resolve(), old)
+
+    def test_activation_syncs_journal_switch_and_result_in_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old = root / "releases/0"
+            old.mkdir(parents=True)
+            (root / "current").symlink_to(old)
+            boundaries = []
+
+            def inspect(directory):
+                self.assertEqual(directory, root)
+                boundaries.append((updater.state()["result"], (root / "current").resolve().name))
+
+            with patch.object(updater, "ROOT", root), patch.object(updater, "fetch", return_value=b"{}"), \
+                 patch.object(updater, "verify", return_value={"sequence": 1, "expires": time.time() + 60}), \
+                 patch.object(updater, "prepare", side_effect=lambda a, b, path: path.mkdir()), \
+                 patch.object(updater, "sync_directory", side_effect=inspect), patch.object(updater, "run"):
+                updater.reconcile({"origin": "https://example.invalid"}, lambda _: True)
+                self.assertEqual(boundaries, [("activating", "0"), ("activating", "1"), ("healthy", "1")])
+
+    def test_candidate_checks_live_schema_and_uses_service_ca_before_activation(self):
+        checker = load("checker", BASE / "pi/check_candidate.py")
+        with tempfile.TemporaryDirectory() as tmp, patch.object(sys, "path", list(sys.path)), patch.dict(sys.modules):
+            release = Path(tmp)
+            package = release / "terrapi"
+            package.mkdir()
+            shutil.copy(BASE.parent / "backend/terrapi/config_schema.py", package)
+            settings = {"host": "example.invalid", "port": 1883, "username": "fixture", "password": "fixture"}
+            (release / "settings.json").write_text(json.dumps(settings))
+            config = yaml.safe_load((BASE.parent / "backend/conf/config.yaml").read_bytes())
+            config["mqtt"]["ca_certs"] = "local-ca.pem"
+            path = release / "live.yaml"
+            path.write_text(yaml.safe_dump(config))
+            with patch.object(checker.mqtt, "Client") as factory, patch.object(checker.ssl, "create_default_context") as context:
+                client = factory.return_value
+                client.loop_start.side_effect = lambda: client.on_connect(client, None, {}, 0)
+                checker.check(release, path)
+                context.assert_called_with(cafile=release / "local-ca.pem")
+                client.username_pw_set.assert_called_once_with("fixture", "fixture")
+                client.loop_start.side_effect = lambda: client.on_connect(client, None, {}, 5)
+                with self.assertRaises(ValueError):
+                    checker.check(release, path)
+                config["planning"]["active"] = "yes"
+                path.write_text(yaml.safe_dump(config))
+                with self.assertRaises(ValueError):
+                    checker.check(release, path)
+                self.assertEqual(client.connect.call_count, 2)
