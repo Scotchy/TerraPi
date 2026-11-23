@@ -20,6 +20,7 @@ def run_once(path):
         terra = Terrarium(config, resources)
         client = MosquittoClient(connection_settings(config))
         handler = TerraHandler(terra, client, config, path)
+        resources.callback(handler.monitor.close)
         resources.callback(client.disconnect)
         client.start(handler.on_message, handler.publish_config)
         handler.run()

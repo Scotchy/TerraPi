@@ -5,7 +5,7 @@ on:
       component:
         description: Component to deploy or roll back
         type: choice
-        options: [frontend, controller, broker]
+        options: [frontend, controller, broker, monitoring]
         required: true
       build_run:
         description: Successful main build run ID (choose an earlier build for rollback)
@@ -53,9 +53,10 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           WEB_PORT: ${{ inputs.component == 'frontend' && secrets.WEB_PORT || '' }}
           DASHBOARD_URL: ${{ inputs.component == 'frontend' && secrets.DASHBOARD_URL || '' }}
-          BROKER_MONITOR: ${{ inputs.component != 'frontend' && secrets.BROKER_MONITOR || '' }}
+          BROKER_MONITOR: ${{ (inputs.component == 'broker' || inputs.component == 'controller') && secrets.BROKER_MONITOR || '' }}
           BROKER_VOLUMES: ${{ inputs.component == 'broker' && secrets.BROKER_VOLUMES || '' }}
-          BROKER_PASSWORD_FILE: ${{ inputs.component == 'broker' && secrets.BROKER_PASSWORD_FILE || '' }}
+          BROKER_PASSWORD_FILE: ${{ (inputs.component == 'broker' || inputs.component == 'monitoring') && secrets.BROKER_PASSWORD_FILE || '' }}
+          MONITORING_SETTINGS: ${{ inputs.component == 'monitoring' && secrets.MONITORING_SETTINGS || '' }}
           BROKER_ACL: ${{ inputs.component == 'broker' && secrets.BROKER_ACL || '' }}
           BROKER_CERT: ${{ inputs.component == 'broker' && secrets.BROKER_CERT || '' }}
           BROKER_KEY: ${{ inputs.component == 'broker' && secrets.BROKER_KEY || '' }}

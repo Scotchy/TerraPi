@@ -1,12 +1,16 @@
 import paho.mqtt.client as mqtt
 
 
+from .monitoring import ACK_TOPIC
+
+
 class MosquittoClient:
     topics = ("planning/active", "mode/set", "config/get", "config/update")
 
     def __init__(self, settings):
         self.client = mqtt.Client()
         self.ready = False
+        self.client.max_queued_messages_set(8)
         self.host = settings["host"]
         self.port = settings["port"]
         self.client.username_pw_set(settings["user"], settings["password"])
@@ -18,6 +22,7 @@ class MosquittoClient:
             self.ready = False
             if rc == 0:
                 client.subscribe([(topic, 0) for topic in self.topics])
+                client.subscribe(ACK_TOPIC, qos=1)
 
         def subscribed(client, userdata, mid, qos):
             if len(qos) == len(self.topics) and 128 not in qos:
@@ -38,5 +43,8 @@ class MosquittoClient:
         self.client.disconnect()
         self.client.loop_stop()
 
-    def publish(self, topic, payload):
-        self.client.publish(topic, payload)
+    def is_connected(self):
+        return self.client.is_connected()
+
+    def publish(self, topic, payload, qos=0):
+        return self.client.publish(topic, payload, qos=qos)

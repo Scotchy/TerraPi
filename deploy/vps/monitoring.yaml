@@ -1,0 +1,20 @@
+name: terrapi
+services:
+  monitoring:
+    image: ${MONITORING_IMAGE:?required}
+    restart: unless-stopped
+    volumes:
+      - ${MONITORING_SETTINGS_FILE:?required}:/run/monitoring/settings.json:ro
+      - monitoring_data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "2"
+    networks: [app]
+volumes:
+  monitoring_data: {}
+networks:
+  app:
+    name: terrapi-app
+    external: true

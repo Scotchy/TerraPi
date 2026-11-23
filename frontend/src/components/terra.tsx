@@ -4,11 +4,13 @@ import { Control } from './control';
 import { FullConfig, SettingsModal } from './SettingsModal';
 import { Toast } from './Toast';
 import { LoginModal } from './LoginModal';
+import Monitoring from './monitoring/Monitoring';
 import './settings.css';
 
-type Session = 'login' | 'connecting' | 'online' | 'offline';
+type Session = 'login' | 'connecting' | 'online' | 'offline' | 'history';
 interface DashboardState {
     session: Session;
+    monitoringVisible: boolean;
     loginError: string;
     config: FullConfig | null;
     currentMode: string;
@@ -21,7 +23,7 @@ interface DashboardState {
 
 function initialState(): DashboardState {
     return {
-        session: 'login', loginError: '', config: null, currentMode: '', controls: {}, readings: {},
+        session: 'login', monitoringVisible: window.location.hash === '#monitoring', loginError: '', config: null, currentMode: '', controls: {}, readings: {},
         contact: 0, settingsVisible: false, toast: { visible: false, type: 'success', message: '' }
     };
 }
@@ -41,7 +43,33 @@ export class Terra extends React.Component<{}, DashboardState> {
     private requestNumber = 0;
     private pending?: { id: string; finish: (error?: string) => void };
 
+    private authorization = '';
+    private monitoringButton = React.createRef<HTMLButtonElement>();
+
+    private syncView = () => {
+        const monitoringVisible = window.location.hash === '#monitoring';
+        if (!monitoringVisible && this.state.session === 'history') this.onDisconnect();
+        this.setState({ monitoringVisible }, () => {
+            if (!monitoringVisible) this.monitoringButton.current?.focus();
+        });
+    };
+
+    private openMonitoring = () => {
+        window.history.pushState({ terraView: 'monitoring' }, '', '#monitoring');
+        this.syncView();
+    };
+
+    private closeMonitoring = () => {
+        if (window.history.state?.terraView === 'monitoring') window.history.back();
+        else {
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            this.syncView();
+        }
+    };
+
     componentDidMount() {
+        window.addEventListener('hashchange', this.syncView);
+
         forgetLegacyCredentials();
         if (process.env.NODE_ENV === 'production' && window.location.protocol === 'http:') {
             const secure = new URL(window.location.href);
@@ -54,6 +82,7 @@ export class Terra extends React.Component<{}, DashboardState> {
     }
 
     componentWillUnmount() {
+        window.removeEventListener('hashchange', this.syncView);
         window.clearInterval(this.timer);
         this.closeClient();
     }
@@ -70,6 +99,12 @@ export class Terra extends React.Component<{}, DashboardState> {
         this.closeClient();
         this.setState({ session: 'connecting', loginError: '' });
         try {
+            const bytes = new TextEncoder().encode(username + ':' + password);
+            this.authorization = 'Basic ' + btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''));
+            if (this.state.monitoringVisible) {
+                this.setState({ session: 'history' });
+                return;
+            }
             const uri = new URL('/terra/mqtt', window.location.href);
             uri.protocol = uri.protocol === 'https:' ? 'wss:' : 'ws:';
             const dev = process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEV_MQTT_URL;
@@ -106,7 +141,8 @@ export class Terra extends React.Component<{}, DashboardState> {
         }
     };
 
-    private loginFailed() {
+    private loginFailed = () => {
+        this.authorization = '';
         this.closeClient();
         this.setState({ session: 'login', loginError: 'Could not sign in. Check the connection and credentials.' });
     }
@@ -187,6 +223,7 @@ export class Terra extends React.Component<{}, DashboardState> {
     onSettingsClose = () => this.setState({ settingsVisible: false });
     onToastClose = () => this.setState(state => ({ toast: { ...state.toast, visible: false } }));
     onDisconnect = () => {
+        this.authorization = '';
         this.closeClient();
         forgetLegacyCredentials();
         this.setState(initialState());
@@ -194,6 +231,10 @@ export class Terra extends React.Component<{}, DashboardState> {
 
     render() {
         const { config, session, controls, currentMode } = this.state;
+        if (this.state.monitoringVisible && this.authorization && ['online', 'offline', 'history'].includes(session)) {
+            return <Monitoring authorization={this.authorization} onBack={this.closeMonitoring}
+                onUnauthorized={session === 'history' ? this.loginFailed : undefined} />;
+        }
         const live = session === 'online' && !!config && Date.now() - this.state.contact < 10000;
         const sensor = Object.keys(config?.sensors ?? {})[0];
         const reading = (field: string) => {
@@ -204,6 +245,8 @@ export class Terra extends React.Component<{}, DashboardState> {
         return (
             <div id="terra" className="flex-container">
 
+                {(session === 'online' || session === 'offline') &&
+                    <button className="monitoring-button" onClick={this.openMonitoring} ref={this.monitoringButton}>Monitoring</button>}
                 {(session === 'offline' || (session === 'online' && !live)) &&
                     <div role="status">{session === 'offline' ? 'Broker disconnected. Reconnecting…' : 'Waiting for the controller'}
                         <button onClick={this.onDisconnect}>Disconnect</button>

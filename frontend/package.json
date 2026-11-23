@@ -25,6 +25,9 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "devDependencies": {
+    "http-proxy-middleware": "^2.0.6"
+  },
   "eslintConfig": {
     "extends": [
       "react-app",

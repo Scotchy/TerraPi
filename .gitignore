@@ -18,3 +18,4 @@ settings.json
 updater.json
 allowed-volumes.json
 known_hosts
+monitor-outbox.sqlite3*

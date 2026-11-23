@@ -32,6 +32,16 @@ vps = load("vps", BASE / "vps/apply.py")
 
 
 class VPSDeployment(unittest.TestCase):
+    def test_history_receives_only_the_dashboard_password_hash(self):
+        accounts = "dash:$7$fixture\nrelease:$7$other-user\n"
+        settings = {"mqtt_user": "collector", "mqtt_password": "test",
+                    "dashboard_user": "dash", "history_days": 30}
+        self.assertEqual(dispatch.monitoring_settings(settings, accounts),
+                         dict(settings, dashboard_hash="$7$fixture"))
+        for invalid in ("", "dash:$6$legacy\n", accounts + "dash:$7$duplicate\n"):
+            with self.assertRaises(ValueError):
+                dispatch.monitoring_settings(settings, invalid)
+
     def test_registry_auth_is_private_and_discarded_after_a_failed_pull(self):
         job = {"component": "frontend", "registry": {"username": "runner", "token": "fixture"}}
         config_files = []

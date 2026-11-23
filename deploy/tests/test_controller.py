@@ -14,6 +14,7 @@ import yaml
 
 BACKEND = Path(__file__).resolve().parents[2] / "backend"
 sys.path.insert(0, str(BACKEND))
+from terrapi import monitoring
 from terrapi.client import MosquittoClient
 from terrapi.config_loader import connection_settings
 from terrapi.config_manager import public_config, revision, update_config
@@ -37,6 +38,15 @@ class ControllerTests(unittest.TestCase):
                                      controls={"light": self.relay, "cooling_system": self.cooler})
         with patch.dict(os.environ, TERRAPI_DEPLOYMENT="17"):
             self.handler = TerraHandler(self.terra, self.client, self.config, self.path)
+
+        self.addCleanup(self.handler.monitor.close)
+
+    def test_history_failure_preserves_local_control(self):
+        self.handler.monitor.path = self.path.parent / "missing/queue.db"
+        with self.assertLogs(level="WARNING"):
+            self.cycle({"temperature": 29})
+        self.cooler.switch.assert_called_with(True)
+        self.client.publish.assert_any_call("terrapi/deploy/controller/health", "17")
 
     def cycle(self, reading, at=100):
         self.sensor.get_data.return_value = reading
@@ -155,8 +165,9 @@ class ControllerTests(unittest.TestCase):
             self.assertFalse(client.ready)
             mqtt.on_connect(mqtt, None, {}, 0)
             mqtt.on_subscribe(mqtt, None, 2, [0] * 4)
-            self.assertEqual(mqtt.subscribe.call_args.args[0], [(t, 0) for t in client.topics])
-            self.assertEqual(mqtt.subscribe.call_count, 2)
+            mqtt.subscribe.assert_any_call([(t, 0) for t in client.topics])
+            mqtt.subscribe.assert_any_call(monitoring.ACK_TOPIC, qos=1)
+            self.assertEqual(mqtt.subscribe.call_count, 4)
             self.assertEqual(ready.call_count, 2)
 
     def test_failed_attempt_releases_hardware_and_next_attempt_sets_bcm_again(self):
@@ -175,3 +186,59 @@ class ControllerTests(unittest.TestCase):
                 self.assertEqual(runner.GPIO.cleanup.call_count, 2)
                 self.assertEqual(devices["adafruit_dht"].DHT22.return_value.exit.call_count, 2)
                 self.assertEqual(transport.return_value.disconnect.call_count, 2)
+
+
+class MonitoringOutbox(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.path = Path(folder.name) / "queue.db"
+        self.client = MagicMock()
+        self.client.is_connected.return_value = False
+        self.monitor = monitoring.Monitor(self.path, self.client)
+        self.addCleanup(lambda: self.monitor.close())
+        self.start = 1800000000
+
+    def update(self, minute, seconds=0):
+        moment = self.start + 60 * minute + seconds
+        with patch.object(monitoring.time, "time", return_value=moment), \
+             patch.object(monitoring.time, "monotonic", return_value=moment):
+            self.monitor.update({"dht22": {"temperature": 23.3, "humidity": float("nan")}},
+                                {"light": True, "cooling_system": False}, False)
+
+    def test_replays_after_restart_and_only_deletes_after_commit(self):
+        self.update(0)
+        self.update(0, 1)
+        self.client.publish.assert_not_called()
+        self.monitor.close()
+        self.monitor = monitoring.Monitor(self.path, self.client)
+        self.client.is_connected.return_value = True
+        self.update(2)
+        topic, payload = self.client.publish.call_args.args
+        self.assertEqual(topic, monitoring.SAMPLE_TOPIC)
+        self.assertEqual(self.client.publish.call_args.kwargs, {"qos": 1})
+        batch = json.loads(payload)
+        live, recovered = batch["samples"]
+        self.assertEqual(live["ts"], self.start + 120)
+        self.assertFalse(live["recovered"])
+        self.assertEqual(recovered, dict(ts=self.start, temperature=23.3, humidity=None,
+                                         power=False, led=True, cooling=False, recovered=True))
+        self.monitor.acknowledge("stale-batch")
+        self.update(2, monitoring.RETRY_SECONDS)
+        self.assertEqual(self.client.publish.call_args.args[1], payload)
+        self.monitor.acknowledge(batch["id"])
+        self.update(2, monitoring.RETRY_SECONDS + 1)
+        self.assertEqual(self.monitor.db.execute("SELECT COUNT(*) FROM pending").fetchone()[0], 0)
+
+    def test_expires_old_minutes_and_replays_in_bounded_batches(self):
+        self.update(-monitoring.RETENTION_SECONDS // 60)
+        for minute in range(monitoring.BATCH_SIZE + 1):
+            self.update(minute)
+        self.client.is_connected.return_value = True
+        self.update(monitoring.BATCH_SIZE, 5)
+        batch = json.loads(self.client.publish.call_args.args[1])
+        self.assertEqual(len(batch["samples"]), monitoring.BATCH_SIZE)
+        self.monitor.acknowledge(batch["id"])
+        self.update(monitoring.BATCH_SIZE, 6)
+        last, = json.loads(self.client.publish.call_args.args[1])["samples"]
+        self.assertEqual(last["ts"], self.start)

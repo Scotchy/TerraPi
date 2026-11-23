@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import Paho from 'paho-mqtt';
 import App from './App';
+import { TextEncoder } from 'util';
 import { SettingsModal } from './components/SettingsModal';
 
 jest.mock('paho-mqtt', () => ({ Client: jest.fn() }));
@@ -32,6 +33,7 @@ function login() {
 }
 
 beforeEach(() => {
+  global.TextEncoder = TextEncoder as typeof global.TextEncoder;
   jest.clearAllMocks();
   (Paho.Client as jest.Mock).mockImplementation(() => broker);
   broker.isConnected.mockReturnValue(true);
@@ -112,4 +114,23 @@ test('loads a late settings snapshot and rejects duplicate mode and period names
   expect(screen.getByLabelText('Rename period sunrise')).toHaveValue('sunrise');
   expect(screen.getByLabelText('Rename period evening')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+});
+
+test('a monitoring bookmark authenticates directly with the history service', async () => {
+  const fetch = global.fetch;
+  try {
+    global.fetch = jest.fn().mockResolvedValue({ status: 401 });
+    window.history.replaceState(null, '', '/terra/#monitoring');
+    render(<App />);
+    fireEvent.change(screen.getByPlaceholderText('Username'), { target: { value: 'fixture' } });
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'expired' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign In' }));
+    expect(await screen.findByText('Could not sign in. Check the connection and credentials.')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/terra/api/monitoring/history?'),
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Basic ' + btoa('fixture:expired') }) }));
+    expect(Paho.Client).not.toHaveBeenCalled();
+  } finally {
+    global.fetch = fetch;
+    window.history.replaceState(null, '', '/');
+  }
 });

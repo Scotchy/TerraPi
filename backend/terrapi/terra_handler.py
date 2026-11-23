@@ -4,11 +4,13 @@ import json
 import logging
 import math
 import os
+from pathlib import Path
 from threading import RLock
 import time
 
 import yaml
 
+from .monitoring import ACK_TOPIC, Monitor
 from .config_manager import public_config, update_config
 from .config_schema import read_config
 from .thermostat import Thermostat
@@ -33,6 +35,7 @@ class TerraHandler:
         self.client = mqtt_client
         self.config = conf
         self.path = config_path
+        self.monitor = Monitor(Path(config_path).with_name("monitor-outbox.sqlite3"), mqtt_client)
         self.lock = RLock()
         self.thermostats = {}
         self.next_report = 0
@@ -71,6 +74,9 @@ class TerraHandler:
         raise ValueError("Unknown command")
 
     def on_message(self, client, userdata, message):
+        if message.topic == ACK_TOPIC:
+            self.monitor.acknowledge(message.payload.decode("ascii", errors="replace"))
+            return
         if message.topic == "config/get":
             self.publish_config()
             return
@@ -141,6 +147,7 @@ class TerraHandler:
                 relay.switch(self.relay_state(name, mode, settings, temperature, now))
                 states[name] = relay.get_state()
             self.client.publish("controls/state", json.dumps(states))
+            self.monitor.update(readings, states, bool(mode) and mode.lower() not in ("none", "off"))
             if now < self.next_report:
                 return
             self.next_report = now + self.config["log_interval"]
